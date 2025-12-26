@@ -14,16 +14,26 @@ router.get('/', authenticate, async (req, res) => {
     const currentUser = req.user;
     const userTypeCheck = currentUser.userType || currentUser.UserType;
     
+    console.log('=== GET USERS ===');
+    console.log('Current user type:', userTypeCheck);
+    console.log('Requested user type:', userType);
+    
     // If teacher, only show students from their assigned classes
     if ((userTypeCheck === 'Teacher' || userTypeCheck === 'teacher') && userType === 'Student') {
       const userId = currentUser.userId || currentUser.userID || currentUser.UserID;
+      console.log('Teacher user ID:', userId);
+      
       const teacher = await Teacher.findOne({ UserID: userId });
       
       if (!teacher) {
+        console.log('Teacher profile not found');
         return res.json({ success: true, data: [] });
       }
       
+      console.log('Teacher assigned classes:', teacher.ClassAssigned);
+      
       if (!teacher.ClassAssigned || teacher.ClassAssigned.length === 0) {
+        console.log('Teacher has no assigned classes');
         return res.json({ success: true, data: [] });
       }
       
@@ -31,6 +41,8 @@ router.get('/', authenticate, async (req, res) => {
       const students = await Student.find({ 
         ClassEnrolled: { $in: teacher.ClassAssigned } 
       });
+      console.log('Students found:', students.length);
+      
       const studentREGs = students.map(s => s.REG);
       
       if (studentREGs.length === 0) {
@@ -51,6 +63,7 @@ router.get('/', authenticate, async (req, res) => {
         UserType: 'Student'
       }).select('-Password');
       
+      console.log('Returning students:', users.length);
       return res.json({ success: true, data: users });
     }
     
@@ -58,6 +71,7 @@ router.get('/', authenticate, async (req, res) => {
     if (userTypeCheck === 'Admin' || userTypeCheck === 'admin') {
       const query = userType ? { UserType: userType } : {};
       const users = await Users.find(query).select('-Password');
+      console.log('Admin - returning users:', users.length);
       return res.json({ success: true, data: users });
     }
     
@@ -65,10 +79,12 @@ router.get('/', authenticate, async (req, res) => {
     if ((userTypeCheck === 'Teacher' || userTypeCheck === 'teacher') && userType === 'Teacher') {
       const query = { UserType: 'Teacher' };
       const users = await Users.find(query).select('-Password');
+      console.log('Teacher - returning teachers:', users.length);
       return res.json({ success: true, data: users });
     }
     
     // Default: return empty for unauthorized
+    console.log('Unauthorized or no match - returning empty');
     res.json({ success: true, data: [] });
   } catch (error) {
     console.error('Error in get users:', error);
@@ -96,23 +112,26 @@ router.post('/', authenticate, async (req, res) => {
     const currentUser = req.user;
     const currentUserType = currentUser.userType || currentUser.UserType;
 
+    console.log('=== CREATE USER ===');
+    console.log('Current user type:', currentUserType);
+    console.log('Creating user type:', userType);
+
     if (!name || !email || !password || !userType) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
     // Permission checks
     if (currentUserType === 'Admin' || currentUserType === 'admin') {
-      // Admins can create anyone
+      console.log('Admin - can create anyone');
     } else if (currentUserType === 'Teacher' || currentUserType === 'teacher') {
-      // Teachers can only create students
       if (userType !== 'Student') {
+        console.log('Teacher trying to create non-student');
         return res.status(403).json({ 
           success: false, 
           message: 'Teachers can only create student accounts' 
         });
       }
 
-      // Validate teacher can only create students in their assigned classes
       if (classEnrolled) {
         const currentUserId = currentUser.userId || currentUser.userID || currentUser.UserID;
         const teacher = await Teacher.findOne({ UserID: currentUserId });
@@ -134,6 +153,9 @@ router.post('/', authenticate, async (req, res) => {
         const requestedClass = parseInt(classEnrolled);
         const assignedClasses = teacher.ClassAssigned.map(c => parseInt(c));
         
+        console.log('Teacher assigned classes:', assignedClasses);
+        console.log('Requested class:', requestedClass);
+        
         if (!assignedClasses.includes(requestedClass)) {
           return res.status(403).json({ 
             success: false, 
@@ -142,7 +164,7 @@ router.post('/', authenticate, async (req, res) => {
         }
       }
     } else {
-      // Students or other roles cannot create users
+      console.log('Unauthorized user type');
       return res.status(403).json({ 
         success: false, 
         message: 'You do not have permission to create users' 
@@ -191,6 +213,7 @@ router.post('/', authenticate, async (req, res) => {
       await teacher.save();
     }
 
+    console.log('User created successfully:', userID);
     res.status(201).json({ success: true, data: { userID, name, email, userType } });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -205,18 +228,24 @@ router.put('/:id', authenticate, async (req, res) => {
     const currentUser = req.user;
     const currentUserType = currentUser.userType || currentUser.UserType;
     
+    console.log('=== UPDATE USER ===');
+    console.log('Current user type:', currentUserType);
+    console.log('Updating user ID:', req.params.id);
+    
     const user = await Users.findOne({ UserID: req.params.id });
     
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    console.log('User to update type:', user.UserType);
+
     // Permission checks
     if (currentUserType === 'Admin' || currentUserType === 'admin') {
-      // Admins can update anyone
+      console.log('Admin - can update anyone');
     } else if (currentUserType === 'Teacher' || currentUserType === 'teacher') {
-      // Teachers can only update students in their assigned classes
       if (user.UserType !== 'Student') {
+        console.log('Teacher trying to update non-student');
         return res.status(403).json({ 
           success: false, 
           message: 'Teachers can only update student accounts' 
@@ -233,7 +262,6 @@ router.put('/:id', authenticate, async (req, res) => {
         });
       }
 
-      // Check if student is in teacher's assigned classes
       const student = await Student.findOne({ UserID: req.params.id });
       if (!student) {
         return res.status(404).json({ success: false, message: 'Student profile not found' });
@@ -242,6 +270,9 @@ router.put('/:id', authenticate, async (req, res) => {
       const assignedClasses = teacher.ClassAssigned.map(c => parseInt(c));
       const studentClass = parseInt(student.ClassEnrolled);
       
+      console.log('Teacher assigned classes:', assignedClasses);
+      console.log('Student class:', studentClass);
+      
       if (!assignedClasses.includes(studentClass)) {
         return res.status(403).json({ 
           success: false, 
@@ -249,7 +280,6 @@ router.put('/:id', authenticate, async (req, res) => {
         });
       }
 
-      // Validate new class if provided
       if (classEnrolled) {
         const newClass = parseInt(classEnrolled);
         if (!assignedClasses.includes(newClass)) {
@@ -289,6 +319,7 @@ router.put('/:id', authenticate, async (req, res) => {
       }
     }
 
+    console.log('User updated successfully');
     res.json({ success: true, message: 'User updated successfully' });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -299,21 +330,32 @@ router.put('/:id', authenticate, async (req, res) => {
 // Delete user (Admin can delete anyone, Teachers can delete Students in their classes)
 router.delete('/:id', authenticate, async (req, res) => {
   try {
+    console.log('=== DELETE USER BACKEND ===');
+    console.log('Request user:', req.user);
+    console.log('User to delete:', req.params.id);
+    
     const currentUser = req.user;
     const currentUserType = currentUser.userType || currentUser.UserType;
+    
+    console.log('Current user type:', currentUserType);
     
     const user = await Users.findOne({ UserID: req.params.id });
     
     if (!user) {
+      console.log('User not found:', req.params.id);
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    console.log('User to delete type:', user.UserType);
+
     // Permission checks
     if (currentUserType === 'Admin' || currentUserType === 'admin') {
-      // Admins can delete anyone
+      console.log('Admin - can delete anyone');
     } else if (currentUserType === 'Teacher' || currentUserType === 'teacher') {
-      // Teachers can only delete students in their assigned classes
+      console.log('Teacher - checking delete permissions');
+      
       if (user.UserType !== 'Student') {
+        console.log('Teacher cannot delete non-students');
         return res.status(403).json({ 
           success: false, 
           message: 'Teachers can only delete student accounts' 
@@ -321,31 +363,54 @@ router.delete('/:id', authenticate, async (req, res) => {
       }
 
       const currentUserId = currentUser.userId || currentUser.userID || currentUser.UserID;
+      console.log('Current teacher user ID:', currentUserId);
+      
       const teacher = await Teacher.findOne({ UserID: currentUserId });
       
-      if (!teacher || !teacher.ClassAssigned || teacher.ClassAssigned.length === 0) {
+      if (!teacher) {
+        console.log('Teacher profile not found');
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Teacher profile not found' 
+        });
+      }
+
+      console.log('Teacher assigned classes:', teacher.ClassAssigned);
+      
+      if (!teacher.ClassAssigned || teacher.ClassAssigned.length === 0) {
+        console.log('Teacher has no assigned classes');
         return res.status(403).json({ 
           success: false, 
           message: 'You have no assigned classes' 
         });
       }
 
-      // Check if student is in teacher's assigned classes
       const student = await Student.findOne({ UserID: req.params.id });
       if (!student) {
+        console.log('Student profile not found');
         return res.status(404).json({ success: false, message: 'Student profile not found' });
       }
+
+      console.log('Student class:', student.ClassEnrolled);
 
       const assignedClasses = teacher.ClassAssigned.map(c => parseInt(c));
       const studentClass = parseInt(student.ClassEnrolled);
       
+      console.log('Assigned classes (parsed):', assignedClasses);
+      console.log('Student class (parsed):', studentClass);
+      console.log('Is student in assigned class?', assignedClasses.includes(studentClass));
+      
       if (!assignedClasses.includes(studentClass)) {
+        console.log('Student not in teacher assigned classes');
         return res.status(403).json({ 
           success: false, 
           message: 'You can only delete students in your assigned classes' 
         });
       }
+
+      console.log('Permission check passed - proceeding with delete');
     } else {
+      console.log('User type not authorized:', currentUserType);
       return res.status(403).json({ 
         success: false, 
         message: 'You do not have permission to delete users' 
@@ -353,17 +418,22 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Delete related records
+    console.log('Deleting profile...');
     await Profile.deleteOne({ UserID: req.params.id });
     
     if (user.UserType === 'Student') {
+      console.log('Deleting student record...');
       await Student.deleteOne({ UserID: req.params.id });
     } else if (user.UserType === 'Teacher') {
+      console.log('Deleting teacher record...');
       await Teacher.deleteOne({ UserID: req.params.id });
     }
     
     // Delete user
+    console.log('Deleting user...');
     await Users.deleteOne({ UserID: req.params.id });
 
+    console.log('Delete successful');
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
