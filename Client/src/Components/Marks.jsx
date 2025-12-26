@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authAPI, marksAPI, timetableAPI, usersAPI, profileAPI, examAPI } from '../services/api';
+import { authAPI, marksAPI, timetableAPI, examAPI } from '../services/api';
 
 function Marks() {
   const navigate = useNavigate();
@@ -59,7 +59,6 @@ function Marks() {
 
         await loadInitialData();
       } else {
-        // Fallback to localStorage
         const email = localStorage.getItem('Email');
         const userType = localStorage.getItem('UserType');
         if (email && userType) {
@@ -75,7 +74,6 @@ function Marks() {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      // Fallback to localStorage
       const email = localStorage.getItem('Email');
       const userType = localStorage.getItem('UserType');
       if (email && userType) {
@@ -93,14 +91,12 @@ function Marks() {
 
   const loadInitialData = async () => {
     try {
-      // Load classes
       const classesRes = await timetableAPI.getAll();
       if (classesRes.success) {
         const classNumbers = classesRes.data.map(c => c.Class);
         setAvailableClasses(classNumbers);
       }
 
-      // Load subjects from classes
       if (classesRes.success && classesRes.data.length > 0) {
         const allSubjects = new Set();
         classesRes.data.forEach(cls => {
@@ -120,7 +116,6 @@ function Marks() {
         setSubjects(Array.from(allSubjects));
       }
     
-      // Load exams from database
       const examsRes = await examAPI.getAll();
       if (examsRes.success) {
         setExams(examsRes.data || []);
@@ -134,7 +129,7 @@ function Marks() {
     try {
       const filters = {};
       
-      // For students, always filter by their REG
+      // For students, filter by their REG
       if (user?.UserType === 'Student' && profile?.REG) {
         filters.reg = profile.REG;
       }
@@ -142,7 +137,7 @@ function Marks() {
       // For teachers/admins, apply selected filters
       if (user?.UserType !== 'Student') {
         if (classes) {
-          filters.class = classes; // Pass class to backend
+          filters.class = classes;
         }
         if (exam) {
           filters.exam = exam;
@@ -152,8 +147,11 @@ function Marks() {
         }
       }
       
+      console.log('Loading marks with filters:', filters);
       const res = await marksAPI.getAll(filters);
+      
       if (res.success) {
+        console.log('Marks received from API:', res.data);
         setMarks(res.data || []);
       }
     } catch (error) {
