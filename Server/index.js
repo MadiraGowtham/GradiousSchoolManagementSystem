@@ -13,38 +13,28 @@ import announcementRoutes from './routes/announcementRoutes.js';
 import timetableRoutes from './routes/timetableRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import examRoutes from './routes/examRoutes.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
 // Load environment variables
 dotenv.config();
-
 // Connect to database and initialize collections
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     // Initialize collections (create them if they don't exist)
     await initCollections();
-    
+
     // Start Express server after DB connection
     const app = express();
     const PORT = process.env.PORT || 5000;
-
     // Middleware
-    app.use(cors({
-      origin: ['http://localhost:5173', 'http://localhost:3000'], // Add your frontend URLs
-      credentials: true
-    }));
+    app.use(cors());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    
-    // Serve static files for uploaded images from Server/uploads
-    const uploadsPath = join(__dirname, 'uploads');
-    app.use('/uploads', express.static(uploadsPath));
-    console.log('✓ Serving static files from:', uploadsPath);
-    
+
+    // Serve static files for uploaded images
+    app.use('/uploads', express.static(join(__dirname, '../Client/public/uploads')));
     // Routes
     app.use('/api/auth', authRoutes);
     app.use('/api/users', userRoutes);
@@ -53,7 +43,6 @@ const startServer = async () => {
     app.use('/api/timetable', timetableRoutes);
     app.use('/api/profile', profileRoutes);
     app.use('/api/exams', examRoutes);
-
     // Health check endpoint
     app.get('/api/health', (req, res) => {
       res.status(200).json({ 
@@ -63,14 +52,13 @@ const startServer = async () => {
         timestamp: new Date().toISOString()
       });
     });
-
     // Database info endpoint
     app.get('/api/db/info', async (req, res) => {
       try {
         const db = mongoose.connection.db;
         const collections = await db.listCollections().toArray();
         const stats = await db.stats();
-        
+
         res.status(200).json({
           success: true,
           database: db.databaseName,
@@ -91,7 +79,6 @@ const startServer = async () => {
         });
       }
     });
-
     // Error handling middleware
     app.use((err, req, res, next) => {
       console.error('Error:', err);
@@ -101,7 +88,6 @@ const startServer = async () => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
       });
     });
-
     // 404 handler
     app.use((req, res) => {
       res.status(404).json({
@@ -109,20 +95,17 @@ const startServer = async () => {
         message: 'Route not found'
       });
     });
-
     app.listen(PORT, () => {
-      console.log(`\n🚀 Server is running on port ${PORT}`);
-      console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
-      console.log(`📊 Database: ${mongoose.connection.db.databaseName}`);
-      console.log(`📁 Uploads directory: ${uploadsPath}`);
-      console.log(`💡 View collections in MongoDB Compass: mongodb://localhost:27017/${mongoose.connection.db.databaseName}\n`);
+      console.log\n🚀 Server is running on port ${PORT});
+      console.log🌐 API Base URL: http://localhost:${PORT}/api);
+      console.log📊 Database: ${mongoose.connection.db.databaseName});
+      console.log💡 View collections in MongoDB Compass: mongodb://localhost:27017/${mongoose.connection.db.databaseName}\n);
     });
-    
+
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
-
 // Start the server
 startServer();
