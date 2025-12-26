@@ -1,0 +1,334 @@
+{
+    "Users": [
+        {
+            "UserID" : "T001",
+            "Name": "John Doe",
+            "Email": "john.doe@example.com",
+            "Password": "password123",
+            "UserType": "Teacher",
+            "CreatedAt": "2023-10-01T10:00:00Z"
+        },
+        {
+            "UserID" : "T002",
+            "Name": "Alice Johnson",
+            "Email": "alice.johnson@example.com",
+            "Password": "password456",
+            "UserType": "Admin",
+            "CreatedAt": "2023-10-01T10:00:00Z"
+        },
+        {
+            "UserID" : "S001",
+            "Name": "Bob Brown",
+            "Email": "bob.brown@example.com",
+            "Password": "password789",
+            "UserType": "Student",
+            "CreatedAt": "2023-10-02T11:00:00Z",
+            "AccountStatus": "Active"
+        },
+        {
+            "UserID" : "S002",
+            "Name": "Jane Smith",
+            "Email": "jane.smith@example.com",
+            "Password": "securepassword",
+            "UserType": "Student",
+            "CreatedAt": "2023-10-02T11:30:00Z",
+            "AccountStatus": "Active"
+        },
+        {
+            "UserID" : "A001",
+            "Name": "Madira Gowtham",
+            "Email": "madira@example.com",
+            "Password": "ABCD",
+            "UserType": "Admin",
+            "CreatedAt": "2023-10-02T11:30:00Z",
+            "AccountStatus": "Active"
+        }
+    ],
+    "Profiles": [
+        {
+            "UserID" : "S001",
+            "REG": "STU789012",
+            "Address": "123 Main St, Anytown, USA",
+            "Phone": "555-1234",
+            "Bio": "Hi, I’m Bob Brown, currently a 10th-grade student at Riverside High School. I transferred here after completing my 9th grade at Maplewood Middle School, where I consistently scored in the top 10% of my class. Throughout my time in school, I’ve worked hard to maintain strong grades, with recent report cards showing A’s in English, Mathematics, Science, Social Studies, and Physical Education. I enjoy learning about the world around me and am especially fascinated by how math and science help explain natural phenomena. At Riverside, I’m focusing on the standard 10th-grade curriculum that includes Geometry, Biology, World History, and English Literature. I strive to challenge myself in all subjects, balancing schoolwork with extracurricular activities like the school soccer team and the chess club. Looking back, each school has helped me grow academically and personally, and I look forward to continuing to learn and prepare for my future career aspirations.",
+            "Gender" : "Male",
+            "Age": 25,
+            "ImageUrl": "./Avatar.png",
+            "LastUpdated": "2023-10-05T12:00:00Z"
+        },
+        {
+            "UserID" : "S002",
+            "REG": "STU654321",
+            "Address": "456 Elm St, Othertown, USA",
+            "Phone": "555-5678",
+            "Bio": "Graduate student specializing in AI research.",
+            "Gender" : "Female",
+            "Age": 24,
+            "ImageUrl": "./Avatar.png",
+            "LastUpdated": "2023-10-05T12:00:00Z"
+        },
+        {
+            "UserID" : "T001",
+            "REG": "TEA987654",
+            "Address": "789 Oak St, Sometown, USA",
+            "Phone": "555-8765",
+            "Bio": "High school teacher with a passion for mathematics.",
+            "Gender" : "Male",
+            "Age": 30,
+            "ImageUrl": "./Avatar.png",
+            "LastUpdated": "2023-10-05T12:00:00Z"
+        },
+        {
+            "UserID" : "T002",
+            "REG": "TEA123789",
+            "Address": "321 Pine St, Anycity, USA",
+            "Phone": "555-4321",
+            "Bio": "Biology teacher with over 10 years of experience.",
+            "Gender" : "Female",
+            "Age": 35,
+            "ImageUrl": "./Avatar.png",
+            "LastUpdated": "2023-10-05T12:00:00Z"
+        },
+        {
+            "UserID" : "A001",
+            "REG": "TEA123789",
+            "Address": "321 Pine St, Anycity, USA",
+            "Phone": "555-4321",
+            "Bio": "Biology teacher with over 10 years of experience.",
+            "Gender" : "Female",
+            "Age": 35,
+            "ImageUrl": "./Avatar.png",
+            "LastUpdated": "2023-10-05T12:00:00Z"
+        }
+    ],
+    "Students":[
+        {
+            "REG": "STU789012",
+            "ClassEnrolled" : 10
+        },
+        {
+            "REG": "STU654321",
+            "ClassEnrolled" : 4
+        },
+        {
+            "REG": "STU748364",
+            "ClassEnrolled" : 8
+        }
+    ],
+    "Teachers":[
+        {
+            "REG": "TEA987654",
+            "ClassAssigned" : [3,4,5,6,7,8,9,10],
+            "Subject" : "Mathematics"
+        },
+        {
+            "REG": "TEA123789",
+            "ClassAssigned" : [6,7,8,9,10],
+            "Subject" : "Biology"
+        }
+    ],
+    "Subjects": {
+        "Mathematics" : "M01",
+        "Science" : "S01",
+        "History" : "S22",
+        "English" : "E01",
+        "Physics" : "S11",
+        "Chemistry" : "S12",
+        "Biology" : "S13",
+        "Computer Science" : "CS01",
+        "Geography" : "S21"
+    },
+    "Classes": [
+    {
+      "Class": 10,
+      "TimeTable": {
+        "Monday": [
+          { "time": "09:00 - 10:00", "subject": "M01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S22" ,"teacher":"T001"}
+        ],
+        "Tuesday": [
+          { "time": "09:00 - 10:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "M01" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "S22" ,"teacher":"T002"}
+        ],
+        "Wednesday": [
+          { "time": "09:00 - 10:00", "subject": "E01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S22" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "M01" ,"teacher":"T001"}
+        ],
+        "Thursday": [
+          { "time": "09:00 - 10:00", "subject": "CS01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "M01" ,"teacher":"T001"}
+        ],
+        "Friday": [
+          { "time": "09:00 - 10:00", "subject": "S22" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "S01" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "E01" ,"teacher":"T002"}
+        ]
+      }
+    },
+    {
+      "Class": 4,
+      "TimeTable": {
+        "Monday": [
+          { "time": "09:00 - 10:00", "subject": "E01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "M01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S01" ,"teacher":"T001"}
+        ],
+        "Tuesday": [
+          { "time": "09:00 - 10:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "E01" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "M01" ,"teacher":"T002"}
+        ],
+        "Wednesday": [
+          { "time": "09:00 - 10:00", "subject": "M01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "E01" ,"teacher":"T001"}
+        ],
+        "Thursday": [
+          { "time": "09:00 - 10:00", "subject": "S01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "E01" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "M01" ,"teacher":"T002"}
+        ],
+        "Friday": [
+          { "time": "09:00 - 10:00", "subject": "M01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "E01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S01" ,"teacher":"T001"}
+        ]
+      }
+    },
+    {
+      "Class": 8,
+      "TimeTable": {
+        "Monday": [
+          { "time": "09:00 - 10:00", "subject": "M01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S11" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S12" ,"teacher":"T001"}
+        ],
+        "Tuesday": [
+          { "time": "09:00 - 10:00", "subject": "S11" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "S12" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "M01" ,"teacher":"T002"}
+        ],
+        "Wednesday": [
+          { "time": "09:00 - 10:00", "subject": "S12" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "M01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S11" ,"teacher":"T001"}
+        ],
+        "Thursday": [
+          { "time": "09:00 - 10:00", "subject": "M01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "S12" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "S11" ,"teacher":"T002"}
+        ],
+        "Friday": [
+          { "time": "09:00 - 10:00", "subject": "S11" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "M01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S12" ,"teacher":"T001"}
+        ]
+      }
+    },
+    {
+      "Class": 5,
+      "TimeTable": {
+        "Monday": [
+          { "time": "09:00 - 10:00", "subject": "S01" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "S22" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "CS01" ,"teacher":"T001"}
+        ],
+        "Tuesday": [
+          { "time": "09:00 - 10:00", "subject": "CS01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "S01" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "S22" ,"teacher":"T002"}
+        ],
+        "Wednesday": [
+          { "time": "09:00 - 10:00", "subject": "S22" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "CS01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "E01" ,"teacher":"T001"}
+        ],
+        "Thursday": [
+          { "time": "09:00 - 10:00", "subject": "S22" ,"teacher":"T001"},
+          { "time": "10:00 - 11:00", "subject": "CS01" ,"teacher":"T002"},
+          { "time": "11:00 - 12:00", "subject": "S01" ,"teacher":"T001"}
+        ],
+        "Friday": [
+          { "time": "09:00 - 10:00", "subject": "CS01" ,"teacher":"T002"},
+          { "time": "10:00 - 11:00", "subject": "S22" ,"teacher":"T001"},
+          { "time": "11:00 - 12:00", "subject": "S01" ,"teacher":"T002"}
+        ]
+      }
+    }
+  ],
+    "Marks": [
+        {
+            "REG": "STU748364",
+            "Subject": "M01",
+            "MarksObtained": 85,
+            "Remarks": "Good performance",
+            "Exam" : "Mid1",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        },
+        {
+            "REG": "STU654321",
+            "Subject": "S01",
+            "MarksObtained": 90,
+            "Remarks": "Excellent work",
+            "Exam" : "Mid1",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        },
+        {
+            "REG": "STU789012",
+            "Subject": "E01",
+            "MarksObtained": 78,
+            "Remarks": "Needs improvement",
+            "Exam" : "Mid1",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        },
+        {
+            "REG": "STU789012",
+            "Subject": "S13",
+            "MarksObtained": 88,
+            "Remarks": "Well done",
+            "Exam" : "Mid1",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        },
+        {
+            "REG": "STU789012",
+            "Subject": "M01",
+            "MarksObtained": 92,
+            "Exam" : "Mid1",
+            "Remarks": "Outstanding performance",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        },
+        {
+            "REG": "STU789012",
+            "Subject": "S11",
+            "MarksObtained": 85,
+            "Remarks": "Good job",
+            "Exam" : "Mid1",
+            "LastUpdated": "2023-10-10T14:00:00Z"
+        }
+    ],
+    "Announcements" : [
+        {
+            "Title": "School Holiday",
+            "Description": "There will be a school holiday on December 25th.",
+            "LastUpdated": "2023-10-10T14:00:00Z",
+            "Visibility": "All"
+        },
+        {
+            "Title": "New Term Starts",
+            "Description": "The new term will start on January 1st.",
+            "LastUpdated": "2023-10-10T14:00:00Z",
+            "Visibility": "All"
+        },
+        {
+            "Title": "Exam Schedule",
+            "Description": "The exam schedule for the next term has been released.",
+            "LastUpdated": "2023-10-10T14:00:00Z",
+            "Visibility": "Student",
+            "Class": 10
+        }
+    ]
+}
