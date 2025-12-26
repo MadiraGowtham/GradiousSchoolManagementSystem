@@ -105,6 +105,7 @@ function Marks() {
       // Load all users
       const usersRes = await usersAPI.getAll();
       if (usersRes.success) {
+        console.log('All users loaded:', usersRes.data);
         setAllUsers(usersRes.data || []);
       }
 
@@ -150,6 +151,7 @@ function Marks() {
     
       const res = await marksAPI.getAll(filters);
       if (res.success) {
+        console.log('All marks loaded:', res.data);
         setAllMarks(res.data || []);
       }
     } catch (error) {
@@ -160,29 +162,60 @@ function Marks() {
   };
 
   const getStudentsInClass = (classNumber) => {
-    return allUsers
-      .filter(u => u.UserType === 'Student' && u.ClassEnrolled === classNumber)
+    // Convert classNumber to string for comparison to handle type mismatches
+    const classStr = String(classNumber);
+    
+    console.log('Looking for students in class:', classStr);
+    console.log('All users:', allUsers);
+    
+    const studentsInClass = allUsers
+      .filter(u => {
+        const isStudent = u.UserType === 'Student';
+        const classMatch = String(u.ClassEnrolled) === classStr;
+        
+        if (isStudent && u.ClassEnrolled) {
+          console.log(`Student ${u.REG}: ClassEnrolled=${u.ClassEnrolled}, Match=${classMatch}`);
+        }
+        
+        return isStudent && classMatch;
+      })
       .map(s => s.REG)
       .filter(Boolean);
+    
+    console.log('Students found in class:', studentsInClass);
+    return studentsInClass;
   };
 
   const applyFilters = () => {
     let filtered = [...allMarks];
+    
+    console.log('Starting filter with', filtered.length, 'marks');
+    console.log('Filters - Class:', classes, 'Exam:', exam, 'Search:', search);
 
     // Filter by class - get students in that class
     if (classes) {
       const studentREGs = getStudentsInClass(classes);
+      console.log('Student REGs in class:', studentREGs);
+      
       if (studentREGs.length > 0) {
-        filtered = filtered.filter(m => studentREGs.includes(m.REG));
+        filtered = filtered.filter(m => {
+          const match = studentREGs.includes(m.REG);
+          if (!match) {
+            console.log(`Mark for ${m.REG} excluded - not in class ${classes}`);
+          }
+          return match;
+        });
       } else {
-        // If no students found in class, show empty results
+        console.warn(`No students found for class ${classes}`);
         filtered = [];
       }
+      console.log('After class filter:', filtered.length, 'marks');
     }
 
     // Filter by exam
     if (exam) {
       filtered = filtered.filter(m => m.Exam === exam);
+      console.log('After exam filter:', filtered.length, 'marks');
     }
 
     // Filter by search (REG)
@@ -190,8 +223,10 @@ function Marks() {
       filtered = filtered.filter(m => 
         m.REG?.toLowerCase().includes(search.toLowerCase())
       );
+      console.log('After search filter:', filtered.length, 'marks');
     }
 
+    console.log('Final filtered marks:', filtered);
     setMarks(filtered);
   };
 
