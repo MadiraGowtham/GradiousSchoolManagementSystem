@@ -104,12 +104,25 @@ function Marks() {
 
       // Load all students to get their class enrollments
       try {
+        console.log('Loading students...');
         const studentsRes = await usersAPI.getAll();
-        if (studentsRes.success) {
+        console.log('Students API response:', studentsRes);
+        
+        if (studentsRes.success && studentsRes.data) {
+          console.log('Students loaded:', studentsRes.data.length);
           setAllStudents(studentsRes.data || []);
+        } else if (studentsRes.users) {
+          // Alternative response format
+          console.log('Students loaded (alternative format):', studentsRes.users.length);
+          setAllStudents(studentsRes.users || []);
+        } else {
+          console.warn('No students data in response:', studentsRes);
+          setAllStudents([]);
         }
       } catch (error) {
         console.error('Error loading students:', error);
+        console.error('Error details:', error.message, error.response);
+        setAllStudents([]);
       }
 
       // Load marks
@@ -154,8 +167,22 @@ function Marks() {
     
       const res = await marksAPI.getAll(filters);
       if (res.success) {
-        setAllMarks(res.data || []);
-        applyFilters(res.data || []);
+        let marksData = res.data || [];
+        
+        // Enrich marks data with class information if we have students data
+        if (allStudents.length > 0) {
+          marksData = marksData.map(mark => {
+            const student = allStudents.find(s => s.REG === mark.REG);
+            return {
+              ...mark,
+              ClassEnrolled: student?.ClassEnrolled || mark.ClassEnrolled
+            };
+          });
+        }
+        
+        console.log('Marks loaded with class info:', marksData);
+        setAllMarks(marksData);
+        applyFilters(marksData);
       }
     } catch (error) {
       console.error('Error loading marks:', error);
@@ -195,21 +222,39 @@ function Marks() {
   const applyFilters = (marksData) => {
     console.log('Applying filters - Class:', classes, 'Exam:', exam, 'Search:', search);
     console.log('Total marks data:', marksData.length);
+    console.log('All students available:', allStudents.length);
     
     let filtered = [...marksData];
 
-    // Filter by class - get all students in that class and filter marks by their REGs
+    // Filter by class
     if (classes) {
-      const studentsInClass = getStudentsByClass(classes);
-      const regsInClass = studentsInClass.map(s => s.REG);
-      
-      console.log('REGs in selected class:', regsInClass);
-      
-      if (regsInClass.length === 0) {
-        console.warn('No students found for class:', classes);
+      // Method 1: If we have students data, use it
+      if (allStudents.length > 0) {
+        const studentsInClass = getStudentsByClass(classes);
+        const regsInClass = studentsInClass.map(s => s.REG);
+        
+        console.log('Using students data - REGs in selected class:', regsInClass);
+        
+        if (regsInClass.length === 0) {
+          console.warn('No students found for class:', classes);
+        }
+        
+        filtered = filtered.filter(m => regsInClass.includes(m.REG));
+      } 
+      // Method 2: Fallback - filter by ClassEnrolled field in marks data itself
+      else {
+        console.log('Fallback: Using ClassEnrolled from marks data');
+        filtered = filtered.filter(m => {
+          const markClass = m.ClassEnrolled;
+          const selectedClass = classes;
+          
+          // Try multiple comparison methods
+          return markClass === selectedClass || 
+                 String(markClass) === String(selectedClass) ||
+                 parseInt(markClass) === parseInt(selectedClass);
+        });
       }
       
-      filtered = filtered.filter(m => regsInClass.includes(m.REG));
       console.log('After class filter:', filtered.length);
     }
 
