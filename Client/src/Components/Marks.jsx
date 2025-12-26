@@ -166,32 +166,66 @@ function Marks() {
 
   const getStudentsByClass = (classNumber) => {
     if (!classNumber) return [];
-    return allStudents.filter(student => 
-      student.ClassEnrolled === classNumber || 
-      student.ClassEnrolled === parseInt(classNumber)
-    );
+    
+    // Try multiple comparison methods to handle different data formats
+    const filtered = allStudents.filter(student => {
+      const studentClass = student.ClassEnrolled;
+      const classNum = classNumber;
+      
+      // Direct comparison
+      if (studentClass === classNum) return true;
+      
+      // String comparison
+      if (String(studentClass) === String(classNum)) return true;
+      
+      // Number comparison
+      if (parseInt(studentClass) === parseInt(classNum)) return true;
+      
+      return false;
+    });
+    
+    console.log('Class filter:', classNumber);
+    console.log('All students:', allStudents.length);
+    console.log('Students in class:', filtered.length);
+    console.log('Filtered students:', filtered);
+    
+    return filtered;
   };
 
   const applyFilters = (marksData) => {
+    console.log('Applying filters - Class:', classes, 'Exam:', exam, 'Search:', search);
+    console.log('Total marks data:', marksData.length);
+    
     let filtered = [...marksData];
 
     // Filter by class - get all students in that class and filter marks by their REGs
     if (classes) {
       const studentsInClass = getStudentsByClass(classes);
       const regsInClass = studentsInClass.map(s => s.REG);
+      
+      console.log('REGs in selected class:', regsInClass);
+      
+      if (regsInClass.length === 0) {
+        console.warn('No students found for class:', classes);
+      }
+      
       filtered = filtered.filter(m => regsInClass.includes(m.REG));
+      console.log('After class filter:', filtered.length);
     }
 
     if (exam) {
       filtered = filtered.filter(m => m.Exam === exam);
+      console.log('After exam filter:', filtered.length);
     }
 
     if (search) {
       filtered = filtered.filter(m => 
         m.REG?.toLowerCase().includes(search.toLowerCase())
       );
+      console.log('After search filter:', filtered.length);
     }
 
+    console.log('Final filtered marks:', filtered);
     setMarks(filtered);
   };
 
