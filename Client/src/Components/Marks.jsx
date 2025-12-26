@@ -106,14 +106,16 @@ function Marks() {
       try {
         console.log('Loading students...');
         const studentsRes = await usersAPI.getAll();
-        console.log('Students API response:', studentsRes);
+        console.log('Students API full response:', JSON.stringify(studentsRes, null, 2));
         
         if (studentsRes.success && studentsRes.data) {
           console.log('Students loaded:', studentsRes.data.length);
+          console.log('First student sample:', studentsRes.data[0]);
           setAllStudents(studentsRes.data || []);
         } else if (studentsRes.users) {
           // Alternative response format
           console.log('Students loaded (alternative format):', studentsRes.users.length);
+          console.log('First student sample:', studentsRes.users[0]);
           setAllStudents(studentsRes.users || []);
         } else {
           console.warn('No students data in response:', studentsRes);
@@ -169,20 +171,9 @@ function Marks() {
       if (res.success) {
         let marksData = res.data || [];
         
-        // Enrich marks data with class information if we have students data
-        if (allStudents.length > 0) {
-          marksData = marksData.map(mark => {
-            const student = allStudents.find(s => s.REG === mark.REG);
-            return {
-              ...mark,
-              ClassEnrolled: student?.ClassEnrolled || mark.ClassEnrolled
-            };
-          });
-        }
-        
-        console.log('Marks loaded with class info:', marksData);
+        console.log('Marks loaded:', marksData.length);
         setAllMarks(marksData);
-        applyFilters(marksData);
+        // Note: applyFilters will be called by useEffect when allMarks changes
       }
     } catch (error) {
       console.error('Error loading marks:', error);
@@ -191,11 +182,11 @@ function Marks() {
     }
   };
 
-  const getStudentsByClass = (classNumber) => {
+  const getStudentsByClass = (classNumber, studentsData) => {
     if (!classNumber) return [];
     
     // Try multiple comparison methods to handle different data formats
-    const filtered = allStudents.filter(student => {
+    const filtered = studentsData.filter(student => {
       const studentClass = student.ClassEnrolled;
       const classNum = classNumber;
       
@@ -212,25 +203,25 @@ function Marks() {
     });
     
     console.log('Class filter:', classNumber);
-    console.log('All students:', allStudents.length);
+    console.log('All students:', studentsData.length);
     console.log('Students in class:', filtered.length);
     console.log('Filtered students:', filtered);
     
     return filtered;
   };
 
-  const applyFilters = (marksData) => {
+  const applyFilters = (marksData, studentsData) => {
     console.log('Applying filters - Class:', classes, 'Exam:', exam, 'Search:', search);
     console.log('Total marks data:', marksData.length);
-    console.log('All students available:', allStudents.length);
+    console.log('All students available:', studentsData.length);
     
     let filtered = [...marksData];
 
     // Filter by class
     if (classes) {
       // Method 1: If we have students data, use it
-      if (allStudents.length > 0) {
-        const studentsInClass = getStudentsByClass(classes);
+      if (studentsData.length > 0) {
+        const studentsInClass = getStudentsByClass(classes, studentsData);
         const regsInClass = studentsInClass.map(s => s.REG);
         
         console.log('Using students data - REGs in selected class:', regsInClass);
@@ -274,9 +265,12 @@ function Marks() {
     setMarks(filtered);
   };
 
+  // Apply filters whenever dependencies change
   useEffect(() => {
-    applyFilters(allMarks);
-  }, [classes, exam, search, allStudents]);
+    if (allMarks.length > 0 || allStudents.length > 0) {
+      applyFilters(allMarks, allStudents);
+    }
+  }, [classes, exam, search, allMarks, allStudents]);
 
   useEffect(() => {
     if (user?.UserType === 'Student' && profile?.REG) {
@@ -603,7 +597,7 @@ function Marks() {
                       style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
                     >
                       <option value="">Select Student</option>
-                      {getStudentsByClass(classes).map(student => (
+                      {getStudentsByClass(classes, allStudents).map(student => (
                         <option key={student.REG} value={student.REG}>
                           {student.REG} - {student.Name || student.Email}
                         </option>
