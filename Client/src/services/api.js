@@ -1,8 +1,10 @@
 const API_BASE_URL = 'https://gradiousschoolmanagementsystem.onrender.com/api';
 
-// Helper function to get auth token
+// Helper function to get auth token - checks multiple possible token keys
 const getAuthToken = () => {
-  return localStorage.getItem('token') || localStorage.getItem('authToken');
+  return localStorage.getItem('token') || 
+         localStorage.getItem('Token') || 
+         localStorage.getItem('authToken');
 };
 
 // Helper function to make API requests
@@ -88,7 +90,16 @@ export const usersAPI = {
   },
   delete: async (userID) => {
     try {
-      const token = localStorage.getItem('Token');
+      const token = getAuthToken();
+      
+      if (!token) {
+        console.error('No authentication token found');
+        return { success: false, message: 'Authentication token not found. Please log in again.' };
+      }
+      
+      console.log('Deleting user with ID:', userID);
+      console.log('Using token:', token ? 'Token exists' : 'No token');
+      
       const response = await fetch(`${API_BASE_URL}/users/${userID}`, {
         method: 'DELETE',
         headers: {
@@ -98,6 +109,12 @@ export const usersAPI = {
       });
       
       const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Delete failed:', data);
+        throw new Error(data.message || 'Failed to delete user');
+      }
+      
       return data;
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -253,6 +270,3 @@ export default {
   profile: profileAPI,
   exam: examAPI,
 };
-
-
-
