@@ -12,6 +12,7 @@ function Marks() {
   const [classes, setClasses] = useState("");
   const [marks, setMarks] = useState([]);
   const [allMarks, setAllMarks] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [editData, setEditData] = useState(null);
   const [editingKey, setEditingKey] = useState(null);
@@ -21,7 +22,6 @@ function Marks() {
   const [exams, setExams] = useState([]);
   const [availableClasses, setAvailableClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
-  const [studentsInClass, setStudentsInClass] = useState([]);
   const [newResult, setNewResult] = useState({
     REG: "",
     Subject: "",
@@ -102,6 +102,12 @@ function Marks() {
         setAvailableClasses(classNumbers);
       }
 
+      // Load all users
+      const usersRes = await usersAPI.getAll();
+      if (usersRes.success) {
+        setAllUsers(usersRes.data || []);
+      }
+
       // Load marks
       await loadMarks();
 
@@ -135,26 +141,6 @@ function Marks() {
     }
   };
 
-  // Load students for selected class
-  const loadStudentsInClass = async (classNumber) => {
-    try {
-      const usersRes = await usersAPI.getAll();
-      if (usersRes.success) {
-        const students = usersRes.data.filter(u => 
-          u.UserType === 'Student' && 
-          u.ClassEnrolled === classNumber
-        );
-        const studentREGs = students.map(s => s.REG).filter(Boolean);
-        setStudentsInClass(studentREGs);
-        return studentREGs;
-      }
-    } catch (error) {
-      console.error('Error loading students:', error);
-      setStudentsInClass([]);
-      return [];
-    }
-  };
-
   const loadMarks = async () => {
     try {
       const filters = {};
@@ -165,7 +151,6 @@ function Marks() {
       const res = await marksAPI.getAll(filters);
       if (res.success) {
         setAllMarks(res.data || []);
-        applyFilters(res.data || []);
       }
     } catch (error) {
       console.error('Error loading marks:', error);
@@ -174,12 +159,19 @@ function Marks() {
     }
   };
 
-  const applyFilters = async (marksData) => {
-    let filtered = [...marksData];
+  const getStudentsInClass = (classNumber) => {
+    return allUsers
+      .filter(u => u.UserType === 'Student' && u.ClassEnrolled === classNumber)
+      .map(s => s.REG)
+      .filter(Boolean);
+  };
 
-    // Filter by class - get students in that class first
+  const applyFilters = () => {
+    let filtered = [...allMarks];
+
+    // Filter by class - get students in that class
     if (classes) {
-      const studentREGs = await loadStudentsInClass(classes);
+      const studentREGs = getStudentsInClass(classes);
       if (studentREGs.length > 0) {
         filtered = filtered.filter(m => studentREGs.includes(m.REG));
       } else {
@@ -204,8 +196,8 @@ function Marks() {
   };
 
   useEffect(() => {
-    applyFilters(allMarks);
-  }, [classes, exam, search]);
+    applyFilters();
+  }, [classes, exam, search, allMarks, allUsers]);
 
   useEffect(() => {
     if (user?.UserType === 'Student' && profile?.REG) {
@@ -283,6 +275,7 @@ function Marks() {
     }
 
     // Verify student is in selected class
+    const studentsInClass = getStudentsInClass(classes);
     if (!studentsInClass.includes(newResult.REG)) {
       alert(`Student ${newResult.REG} is not enrolled in Class ${classes}`);
       return;
@@ -381,6 +374,7 @@ function Marks() {
   }
 
   const user_REG = profile?.REG || user.REG;
+  const studentsInClass = classes ? getStudentsInClass(classes) : [];
 
   return (
     <div className="marks">
