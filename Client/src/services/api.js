@@ -1,4 +1,6 @@
 const API_BASE_URL = 'https://gradiousschoolmanagementsystem.onrender.com/api';
+// For local development, use:
+// const API_BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to get auth token
 const getAuthToken = () => {
@@ -200,22 +202,48 @@ export const profileAPI = {
       body: JSON.stringify(profileData),
     });
   },
+  
+  // FIXED: Upload profile image with correct field name and better error handling
   uploadImage: async (userID, imageFile) => {
-    const formData = new FormData();
-    formData.append('image', imageFile);
-    const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/profile/${userID}/image`, {
-      method: 'POST',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: formData,
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.message || 'Upload failed');
+    try {
+      console.log('📤 Uploading image for user:', userID);
+      console.log('📁 File details:', {
+        name: imageFile.name,
+        size: imageFile.size,
+        type: imageFile.type
+      });
+
+      const formData = new FormData();
+      formData.append('image', imageFile); // Must match multer field name: upload.single('image')
+      
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/profile/${userID}/image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Do NOT set Content-Type - browser will set it automatically with boundary
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('❌ Upload failed:', data);
+        throw new Error(data.message || 'Upload failed');
+      }
+
+      console.log('✓ Upload successful:', data);
+      return data;
+      
+    } catch (error) {
+      console.error('❌ Upload error:', error);
+      throw new Error(error.message || 'Failed to upload image');
     }
-    return data;
   },
 };
 
@@ -253,5 +281,3 @@ export default {
   profile: profileAPI,
   exam: examAPI,
 };
-
-
