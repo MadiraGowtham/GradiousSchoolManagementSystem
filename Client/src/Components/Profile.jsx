@@ -5,6 +5,11 @@ import emailImage from '../assets/mailIcon.png';
 import phoneImage from '../assets/phoneIcon.png';
 import locationImage from '../assets/addressIcon.png';
 
+// Backend URL - change this based on environment
+const API_BASE_URL = 'https://gradiousschoolmanagementsystem.onrender.com';
+// For local development:
+// const API_BASE_URL = 'http://localhost:5000';
+
 function Profile({ Email }) {
   const email = Email || localStorage.getItem('Email');
   const [loading, setLoading] = useState(true);
@@ -154,8 +159,8 @@ function Profile({ Email }) {
           Age: parseInt(profileData.age) || 0,
           Gender: profileData.gender
         }));
-    alert('Profile updated successfully!');
-    setIsEditing(false);
+        alert('Profile updated successfully!');
+        setIsEditing(false);
       }
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -199,14 +204,23 @@ function Profile({ Email }) {
         return;
       }
 
+      console.log('Starting image upload...');
       const res = await profileAPI.uploadImage(userID, file);
+      
       if (res.success) {
-        // Update local state
+        console.log('Upload successful:', res);
+        
+        // Update local state with new image URL
+        const newImageUrl = res.data?.ImageUrl || res.imageUrl;
         setProfile(prev => ({
           ...prev,
-          ImageUrl: res.data.ImageUrl || res.imageUrl
+          ImageUrl: newImageUrl
         }));
+        
         alert('Profile image updated successfully!');
+        
+        // Optional: Reload profile data to ensure sync
+        await loadProfileData();
       }
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -256,11 +270,27 @@ function Profile({ Email }) {
     roleInfo = 'Administrator';
   }
 
-  const profileImageUrl = profile?.ImageUrl?.startsWith('/') 
-    ? profile.ImageUrl 
-    : profile?.ImageUrl?.startsWith('http')
-    ? profile.ImageUrl
-    : profile?.ImageUrl || image;
+  // FIXED: Properly construct image URL
+  const getProfileImageUrl = () => {
+    if (!profile?.ImageUrl || profile.ImageUrl === './Avatar.png') {
+      return image; // Default avatar
+    }
+    
+    // If it's already a full URL (starts with http)
+    if (profile.ImageUrl.startsWith('http')) {
+      return profile.ImageUrl;
+    }
+    
+    // If it starts with /uploads/, prepend the API base URL
+    if (profile.ImageUrl.startsWith('/uploads/')) {
+      return `${API_BASE_URL}${profile.ImageUrl}`;
+    }
+    
+    // Otherwise use as is
+    return profile.ImageUrl;
+  };
+
+  const profileImageUrl = getProfileImageUrl();
 
   return (
     <div className='profile-container'>
@@ -271,7 +301,8 @@ function Profile({ Email }) {
             alt='profile' 
             className='profile-img'
             onError={(e) => {
-              e.target.src = image;
+              console.error('Image failed to load:', profileImageUrl);
+              e.target.src = image; // Fallback to default avatar
             }}
           />
           <label
@@ -288,12 +319,13 @@ function Profile({ Email }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
+              cursor: uploadingImage ? 'not-allowed' : 'pointer',
               boxShadow: '0 4px 12px rgba(254, 109, 54, 0.4)',
               border: '3px solid white',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              opacity: uploadingImage ? 0.6 : 1
             }}
-            title='Upload new profile image'
+            title={uploadingImage ? 'Uploading...' : 'Upload new profile image'}
           >
             {uploadingImage ? (
               <span style={{ fontSize: '18px' }}>⏳</span>
@@ -358,165 +390,165 @@ function Profile({ Email }) {
       {isEditing ? (
         <div className='info' style={{ backgroundColor: '#FEFEFE', padding: '30px', borderRadius: '12px', border: '2px solid #FE6D36' }}>
           <h2 style={{ marginTop: 0, marginBottom: '25px', color: '#FD3012' }}>Edit Profile Information</h2>
-      <form onSubmit={handleSaveProfile}>
+          <form onSubmit={handleSaveProfile}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
+              <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333' }}>
-              Phone Number
-            </label>
-            <input
-              type='tel'
-              name='phone'
-              value={profileData.phone}
-              onChange={handleInputChange}
-              placeholder='Enter your phone number'
-              style={{
-                width: '100%',
+                  Phone Number
+                </label>
+                <input
+                  type='tel'
+                  name='phone'
+                  value={profileData.phone}
+                  onChange={handleInputChange}
+                  placeholder='Enter your phone number'
+                  style={{
+                    width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem'
-              }}
-            />
-          </div>
+                  }}
+                />
+              </div>
 
-          <div>
+              <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333' }}>
-              Address
-            </label>
-            <input
-              type='text'
-              name='address'
-              value={profileData.address}
-              onChange={handleInputChange}
-              placeholder='Enter your address'
-              style={{
-                width: '100%',
+                  Address
+                </label>
+                <input
+                  type='text'
+                  name='address'
+                  value={profileData.address}
+                  onChange={handleInputChange}
+                  placeholder='Enter your address'
+                  style={{
+                    width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem'
-              }}
-            />
-          </div>
+                  }}
+                />
+              </div>
 
-          <div>
+              <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333' }}>
-              Age
-            </label>
-            <input
-              type='number'
-              name='age'
-              value={profileData.age}
-              onChange={handleInputChange}
-              min='1'
-              max='100'
-              placeholder='Enter your age'
-              style={{
-                width: '100%',
+                  Age
+                </label>
+                <input
+                  type='number'
+                  name='age'
+                  value={profileData.age}
+                  onChange={handleInputChange}
+                  min='1'
+                  max='100'
+                  placeholder='Enter your age'
+                  style={{
+                    width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem'
-              }}
-            />
-          </div>
+                  }}
+                />
+              </div>
 
-          <div>
+              <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333' }}>
-              Gender
-            </label>
-            <select
-              name='gender'
-              value={profileData.gender}
-              onChange={handleInputChange}
-              style={{
-                width: '100%',
+                  Gender
+                </label>
+                <select
+                  name='gender'
+                  value={profileData.gender}
+                  onChange={handleInputChange}
+                  style={{
+                    width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem'
-              }}
-            >
-              <option value=''>Select Gender</option>
-              <option value='Male'>Male</option>
-              <option value='Female'>Female</option>
-              <option value='Other'>Other</option>
-            </select>
-          </div>
+                  }}
+                >
+                  <option value=''>Select Gender</option>
+                  <option value='Male'>Male</option>
+                  <option value='Female'>Female</option>
+                  <option value='Other'>Other</option>
+                </select>
+              </div>
 
-          <div>
+              <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333' }}>
-              Bio
-            </label>
-            <textarea
-              name='bio'
-              value={profileData.bio}
-              onChange={handleInputChange}
-              rows='5'
-              placeholder='Tell us about yourself...'
-              style={{
-                width: '100%',
+                  Bio
+                </label>
+                <textarea
+                  name='bio'
+                  value={profileData.bio}
+                  onChange={handleInputChange}
+                  rows='5'
+                  placeholder='Tell us about yourself...'
+                  style={{
+                    width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     resize: 'vertical',
                     fontSize: '1rem',
                     fontFamily: 'inherit'
-              }}
-            />
-          </div>
-        </div>
+                  }}
+                />
+              </div>
+            </div>
 
             <div style={{ marginTop: '25px', display: 'flex', gap: '12px' }}>
-          <button
-            type='submit'
-            style={{
+              <button
+                type='submit'
+                style={{
                   padding: '12px 28px',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
                   borderRadius: '8px',
-              cursor: 'pointer',
+                  cursor: 'pointer',
                   fontWeight: 'bold',
                   fontSize: '1rem',
                   boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)'
-            }}
-          >
-            Save Changes
-          </button>
-          <button
-            type='button'
-            onClick={handleCancel}
-            style={{
+                }}
+              >
+                Save Changes
+              </button>
+              <button
+                type='button'
+                onClick={handleCancel}
+                style={{
                   padding: '12px 28px',
-              backgroundColor: '#999',
-              color: 'white',
-              border: 'none',
+                  backgroundColor: '#999',
+                  color: 'white',
+                  border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   fontSize: '1rem'
-            }}
-          >
-            Cancel
-          </button>
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
       ) : (
-    <div className='info'>
-      <div className='about'>
-        <h2>About</h2>
+        <div className='info'>
+          <div className='about'>
+            <h2>About</h2>
             <p>{profile?.Bio || 'No bio added yet. Click "Edit Profile" to add one.'}</p>
-      </div>
-      <div className='age'>
-        <h2>
+          </div>
+          <div className='age'>
+            <h2>
               <b>Age :</b> {profile?.Age || 'Not specified'}
-        </h2>
-        <h2>
+            </h2>
+            <h2>
               <b>Gender :</b> {profile?.Gender || 'Not specified'}
-        </h2>
-      </div>
+            </h2>
+          </div>
         </div>
       )}
     </div>
