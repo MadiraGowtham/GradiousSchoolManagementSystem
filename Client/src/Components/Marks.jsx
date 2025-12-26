@@ -12,6 +12,7 @@ function Marks() {
   const [classes, setClasses] = useState("");
   const [marks, setMarks] = useState([]);
   const [allMarks, setAllMarks] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [editData, setEditData] = useState(null);
   const [editingKey, setEditingKey] = useState(null);
@@ -21,6 +22,7 @@ function Marks() {
   const [exams, setExams] = useState([]);
   const [availableClasses, setAvailableClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [studentClassMap, setStudentClassMap] = useState({});
   const [newResult, setNewResult] = useState({
     REG: "",
     Subject: "",
@@ -55,12 +57,11 @@ function Marks() {
           
           if (userData.UserType === 'Student' && userData.ClassEnrolled) {
             setStudentGrade({ ClassEnrolled: userData.ClassEnrolled });
-    }
+          }
         }
 
         await loadInitialData();
       } else {
-        // Fallback to localStorage
         const email = localStorage.getItem('Email');
         const userType = localStorage.getItem('UserType');
         if (email && userType) {
@@ -76,7 +77,6 @@ function Marks() {
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      // Fallback to localStorage
       const email = localStorage.getItem('Email');
       const userType = localStorage.getItem('UserType');
       if (email && userType) {
@@ -94,57 +94,72 @@ function Marks() {
 
   const loadInitialData = async () => {
     try {
-      // Load classes
       const classesRes = await timetableAPI.getAll();
       if (classesRes.success) {
         const classNumbers = classesRes.data.map(c => c.Class);
         setAvailableClasses(classNumbers);
       }
 
-      // Load marks
+      const usersRes = await usersAPI.getAll();
+      console.log('Users API Response:', usersRes);
+      if (usersRes.success && usersRes.data && Array.isArray(usersRes.data)) {
+        console.log('All users loaded:', usersRes.data);
+        setAllUsers(usersRes.data);
+        
+        const classMap = {};
+        usersRes.data.forEach(u => {
+          if (u.UserType === 'Student' && u.REG && u.ClassEnrolled) {
+            classMap[u.REG] = String(u.ClassEnrolled);
+          }
+        });
+        console.log('Student-Class Map:', classMap);
+        setStudentClassMap(classMap);
+      } else {
+        console.warn('No users data available from API');
+        setAllUsers([]);
+      }
+
       await loadMarks();
 
-        // Load subjects from classes
-        if (classesRes.success && classesRes.data.length > 0) {
-          const allSubjects = new Set();
-          classesRes.data.forEach(cls => {
-            if (cls.TimeTable) {
-              const timetable = cls.TimeTable instanceof Map 
-                ? Object.fromEntries(cls.TimeTable) 
-                : cls.TimeTable;
-              Object.values(timetable).forEach(day => {
-                if (Array.isArray(day)) {
-                  day.forEach(slot => {
-                    if (slot.subject) allSubjects.add(slot.subject);
-                  });
-                }
-              });
-            }
-          });
-          setSubjects(Array.from(allSubjects));
-    }
-    
-        // Load exams from database
-        const examsRes = await examAPI.getAll();
-        if (examsRes.success) {
-          setExams(examsRes.data || []);
-        }
-      } catch (error) {
-        console.error('Error loading initial data:', error);
+      if (classesRes.success && classesRes.data.length > 0) {
+        const allSubjects = new Set();
+        classesRes.data.forEach(cls => {
+          if (cls.TimeTable) {
+            const timetable = cls.TimeTable instanceof Map 
+              ? Object.fromEntries(cls.TimeTable) 
+              : cls.TimeTable;
+            Object.values(timetable).forEach(day => {
+              if (Array.isArray(day)) {
+                day.forEach(slot => {
+                  if (slot.subject) allSubjects.add(slot.subject);
+                });
+              }
+            });
+          }
+        });
+        setSubjects(Array.from(allSubjects));
       }
-    };
+    
+      const examsRes = await examAPI.getAll();
+      if (examsRes.success) {
+        setExams(examsRes.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    }
+  };
 
   const loadMarks = async () => {
     try {
       const filters = {};
       if (user?.UserType === 'Student' && profile?.REG) {
         filters.reg = profile.REG;
-    }
+      }
     
       const res = await marksAPI.getAll(filters);
       if (res.success) {
+        console.log('All marks loaded:', res.data);
         setAllMarks(res.data || []);
-        applyFilters(res.data || []);
       }
     } catch (error) {
       console.error('Error loading marks:', error);
@@ -153,31 +168,82 @@ function Marks() {
     }
   };
 
-  const applyFilters = (marksData) => {
-    let filtered = [...marksData];
+  const getStudentsInClass = (classNumber) => {
+    const classStr = String(classNumber);
+    
+    console.log('Looking for students in class:', classStr);
+    console.log('Student-Class Map:', studentClassMap);
+    console.log('All users count:', allUsers.length);
+    
+    if (Object.keys(studentClassMap).length > 0) {
+      const students = Object.entries(studentClassMap)
+        .filter(([reg, cls]) => cls === classStr)
+        .map(([reg]) => reg);
+      console.log('Students found via mapping:', students);
+      return students;
+    }
+    
+    const studentsInClass = allUsers
+      .filter(u => {
+        const isStudent = u.UserType === 'Student';
+        const classMatch = String(u.ClassEnrolled) === classStr;
+        
+        if (isStudent && u.ClassEnrolled) {
+          console.log(`Student ${u.REG}: ClassEnrolled=${u.ClassEnrolled}, Match=${classMatch}`);
+        }
+        
+        return isStudent && classMatch;
+      })
+      .map(s => s.REG)
+      .filter(Boolean);
+    
+    console.log('Students found via allUsers:', studentsInClass);
+    return studentsInClass;
+  };
+
+  const applyFilters = () => {
+    let filtered = [...allMarks];
+    
+    console.log('Starting filter with', filtered.length, 'marks');
+    console.log('Filters - Class:', classes, 'Exam:', exam, 'Search:', search);
 
     if (classes) {
-      // Filter by class - need to get students in that class
-      // For now, we'll filter by REG pattern or use all marks
-      // In production, you'd have a better API endpoint
+      const studentREGs = getStudentsInClass(classes);
+      console.log('Student REGs in class:', studentREGs);
+      
+      if (studentREGs.length > 0) {
+        filtered = filtered.filter(m => {
+          const match = studentREGs.includes(m.REG);
+          if (!match) {
+            console.log(`Mark for ${m.REG} excluded - not in class ${classes}`);
+          }
+          return match;
+        });
+        console.log('After class filter:', filtered.length, 'marks');
+      } else {
+        console.warn(`No students found for class ${classes} - showing all marks as fallback`);
+      }
     }
 
     if (exam) {
       filtered = filtered.filter(m => m.Exam === exam);
+      console.log('After exam filter:', filtered.length, 'marks');
     }
 
     if (search) {
       filtered = filtered.filter(m => 
         m.REG?.toLowerCase().includes(search.toLowerCase())
       );
+      console.log('After search filter:', filtered.length, 'marks');
     }
 
+    console.log('Final filtered marks:', filtered);
     setMarks(filtered);
   };
 
   useEffect(() => {
-    applyFilters(allMarks);
-  }, [classes, exam, search]);
+    applyFilters();
+  }, [classes, exam, search, allMarks, allUsers, studentClassMap]);
 
   useEffect(() => {
     if (user?.UserType === 'Student' && profile?.REG) {
@@ -206,15 +272,15 @@ function Marks() {
     try {
       const res = await marksAPI.update(editData._id, {
         MarksObtained: parseInt(editData.MarksObtained) || editData.MarksObtained,
-          Remarks: editData.Remarks
-    });
+        Remarks: editData.Remarks
+      });
     
       if (res.success) {
         await loadMarks();
-    alert("Marks updated successfully!");
+        alert("Marks updated successfully!");
         setEditingKey(null);
         setEditData(null);
-  }
+      }
     } catch (error) {
       console.error('Error updating marks:', error);
       alert("Failed to update marks");
@@ -254,27 +320,35 @@ function Marks() {
       return;
     }
 
+    if (Object.keys(studentClassMap).length > 0) {
+      const studentsInClass = getStudentsInClass(classes);
+      if (studentsInClass.length > 0 && !studentsInClass.includes(newResult.REG)) {
+        alert(`Student ${newResult.REG} is not enrolled in Class ${classes}`);
+        return;
+      }
+    }
+
     try {
       const res = await marksAPI.create({
-      REG: newResult.REG,
-      Subject: newResult.Subject,
-      MarksObtained: marksNum,
-      Exam: newResult.Exam,
+        REG: newResult.REG,
+        Subject: newResult.Subject,
+        MarksObtained: marksNum,
+        Exam: newResult.Exam,
         Remarks: newResult.Remarks || ""
       });
 
       if (res.success) {
         await loadMarks();
-    alert("Result added successfully!");
+        alert("Result added successfully!");
         setNewResult({
-      REG: "",
-      Subject: "",
-      MarksObtained: "",
-      Exam: "",
-      Remarks: ""
-    });
+          REG: "",
+          Subject: "",
+          MarksObtained: "",
+          Exam: "",
+          Remarks: ""
+        });
         setShowAddForm(false);
-  }
+      }
     } catch (error) {
       console.error('Error adding result:', error);
       alert(error.message || "Failed to add result");
@@ -299,10 +373,10 @@ function Marks() {
       
       if (res.success) {
         setExams(prev => [...prev, res.data]);
-    alert(`Exam "${trimmedExamName}" created successfully!`);
+        alert(`Exam "${trimmedExamName}" created successfully!`);
         setNewExamName("");
         setShowNewExamForm(false);
-  }
+      }
     } catch (error) {
       console.error('Error creating exam:', error);
       alert(error.message || "Failed to create exam");
@@ -314,6 +388,18 @@ function Marks() {
     const dbExams = [...new Set(allMarks.map(m => m.Exam))];
     const allExams = [...new Set([...examNames, ...dbExams])];
     return allExams.sort();
+  };
+
+  const getStudentsForClass = (classNumber) => {
+    const studentsFromMapping = getStudentsInClass(classNumber);
+    
+    if (studentsFromMapping.length > 0) {
+      return studentsFromMapping;
+    }
+    
+    const allREGs = [...new Set(allMarks.map(m => m.REG))].filter(Boolean);
+    console.warn('Using all REGs from marks as fallback:', allREGs);
+    return allREGs;
   };
 
   if (loading) {
@@ -347,21 +433,42 @@ function Marks() {
   }
 
   const user_REG = profile?.REG || user.REG;
+  const studentsInClass = classes ? getStudentsForClass(classes) : [];
 
   return (
-        <div className="marks">
+    <div className="marks">
       <h1>Examination Marks</h1>
       
+      {(user.UserType === "Teacher" || user.UserType === "Admin") && (
+        <div style={{
+          backgroundColor: '#fff3cd',
+          padding: '10px',
+          margin: '10px 0',
+          borderRadius: '5px',
+          fontSize: '0.9rem',
+          border: '1px solid #ffc107'
+        }}>
+          <strong>Debug Info:</strong> Users loaded: {allUsers.length} | 
+          Student-Class mappings: {Object.keys(studentClassMap).length} |
+          Total marks: {allMarks.length}
+          {allUsers.length === 0 && (
+            <div style={{color: '#d32f2f', marginTop: '5px'}}>
+              ⚠️ Warning: No users loaded from API. Showing all marks regardless of class filter.
+            </div>
+          )}
+        </div>
+      )}
+      
       {user.UserType === "Student" && (
-          <div className="exam-selection">
+        <div className="exam-selection">
           <select onChange={(e) => setExam(e.target.value)} value={exam}>
-              <option value="">Select Exam</option>
+            <option value="">Select Exam</option>
             {getAllExams().map((examName) => (
-                  <option key={examName} value={examName}>
-                    {examName}
-                  </option>
+              <option key={examName} value={examName}>
+                {examName}
+              </option>
             ))}
-            </select>
+          </select>
         </div>
       )}
 
@@ -371,17 +478,17 @@ function Marks() {
             <select onChange={(e) => setClasses(e.target.value)} value={classes}>
               <option value="">Select Grade</option>
               {availableClasses.map((gradeNum) => (
-                    <option key={gradeNum} value={gradeNum}>
+                <option key={gradeNum} value={gradeNum}>
                   Class {gradeNum}
-                    </option>
+                </option>
               ))}
             </select>
             <select onChange={(e) => setExam(e.target.value)} value={exam}>
               <option value="">Select Exam</option>
               {getAllExams().map((examName) => (
-                  <option key={examName} value={examName}>
-                    {examName}
-                  </option>
+                <option key={examName} value={examName}>
+                  {examName}
+                </option>
               ))}
             </select>
             <button 
@@ -484,21 +591,33 @@ function Marks() {
               border: '2px solid #FE6D36',
               boxShadow: '0 4px 12px rgba(254, 109, 54, 0.15)'
             }}>
-              <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#FD3012' }}>Add New Result for Class {classes}</h3>
+              <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#FD3012' }}>
+                Add New Result for Class {classes}
+                {studentsInClass.length === 0 && (
+                  <span style={{fontSize: '0.9rem', color: '#f44336', marginLeft: '10px'}}>
+                    (⚠️ No students found - check Users API)
+                  </span>
+                )}
+              </h3>
               <form onSubmit={handleAddResult}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
                       Registration Number (REG) <span style={{color: 'red'}}>*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={newResult.REG}
-                      onChange={(e) => handleNewResultChange('REG', e.target.value.toUpperCase())}
-                      placeholder="e.g., STU001"
+                      onChange={(e) => handleNewResultChange('REG', e.target.value)}
                       required
                       style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
-                    />
+                    >
+                      <option value="">Select Student</option>
+                      {studentsInClass.map(reg => (
+                        <option key={reg} value={reg}>
+                          {reg}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -513,9 +632,9 @@ function Marks() {
                     >
                       <option value="">Select Subject</option>
                       {subjects.map(subject => (
-                          <option key={subject} value={subject}>
+                        <option key={subject} value={subject}>
                           {subject}
-                          </option>
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -614,9 +733,9 @@ function Marks() {
             </div>
           )}
         </>
-          )}
+      )}
 
-          <div className="marks-table">
+      <div className="marks-table">
         {user.UserType === "Student" && exam && (
           <table>
             <thead>
@@ -645,119 +764,119 @@ function Marks() {
         )}
 
         {(user.UserType === "Teacher" || user.UserType === "Admin") && (classes || exam || search) && (
-              <table>
-                <thead>
-                  <tr>
-                    <th>REG.NO</th>
-                    <th>Grade</th>
-                    <th>Subject</th>
-                    <th>Marks</th>
-                    <th>Remarks</th>
-                    <th>Exam</th>
-                    <th>EDIT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marks.length > 0 ? (
-                    marks.map((data, index) => {
-                      const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
-                      const isEditing = editingKey === editKey;
-                      
-                      return (
+          <table>
+            <thead>
+              <tr>
+                <th>REG.NO</th>
+                <th>Grade</th>
+                <th>Subject</th>
+                <th>Marks</th>
+                <th>Remarks</th>
+                <th>Exam</th>
+                <th>EDIT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marks.length > 0 ? (
+                marks.map((data, index) => {
+                  const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
+                  const isEditing = editingKey === editKey;
+                  
+                  return (
                     <tr key={`${data._id || index}`}>
-                          <td>{data.REG}</td>
-                      <td>{data.ClassEnrolled || 'N/A'}</td>
-                          <td>{data.Subject}</td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                value={editData?.MarksObtained || ''}
-                                onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
+                      <td>{data.REG}</td>
+                      <td>{studentClassMap[data.REG] || classes || 'N/A'}</td>
+                      <td>{data.Subject}</td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={editData?.MarksObtained || ''}
+                            onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
                             style={{width: '80px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                                min="0"
-                                max="100"
-                              />
-                            ) : (
-                              data.MarksObtained
-                            )}
-                          </td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editData?.Remarks || ''}
-                                onChange={(e) => handleEditChange('Remarks', e.target.value)}
+                            min="0"
+                            max="100"
+                          />
+                        ) : (
+                          data.MarksObtained
+                        )}
+                      </td>
+                      <td>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData?.Remarks || ''}
+                            onChange={(e) => handleEditChange('Remarks', e.target.value)}
                             style={{width: '150px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                              />
-                            ) : (
+                          />
+                        ) : (
                           data.Remarks || '-'
-                            )}
-                          </td>
-                          <td>{data.Exam}</td>
-                          <td>
-                            {isEditing ? (
-                              <div style={{display: 'flex', gap: '5px'}}>
-                                <button 
-                                  onClick={handleSaveEdit}
-                                  style={{
+                        )}
+                      </td>
+                      <td>{data.Exam}</td>
+                      <td>
+                        {isEditing ? (
+                          <div style={{display: 'flex', gap: '5px'}}>
+                            <button 
+                              onClick={handleSaveEdit}
+                              style={{
                                 padding: '6px 12px',
-                                    backgroundColor: '#4CAF50',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
                                 fontSize: '0.85rem'
-                                  }}
-                                >
-                                  Save
-                                </button>
-                                <button 
-                                  onClick={handleCancelEdit}
-                                  style={{
-                                padding: '6px 12px',
-                                    backgroundColor: '#f44336',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button 
+                              }}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
                             onClick={() => handleEdit(data)}
-                                style={{
+                            style={{
                               padding: '6px 16px',
                               backgroundColor: '#1025a1',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
                               cursor: 'pointer',
                               fontSize: '0.85rem',
                               fontWeight: '600'
-                                }}
-                              >
-                                Edit
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
+                            }}
+                          >
+                            Edit
+                          </button>
+                      <button 
+                              onClick={handleCancelEdit}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Cancel
+                            </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
                   <td colSpan="7" style={{textAlign: 'center', padding: '40px', color: '#666'}}>
                     No marks found for the selected filters
                   </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
 
         {user.UserType === "Student" && !exam && (
           <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
@@ -770,9 +889,9 @@ function Marks() {
             Please select filters to view marks
           </div>
         )}
-          </div>
-        </div>
+      </div>
+    </div>
   );
 }
 
-export default Marks;
+export default Marks;  
