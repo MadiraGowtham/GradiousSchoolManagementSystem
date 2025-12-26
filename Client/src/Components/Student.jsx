@@ -133,6 +133,7 @@ function Student({ Email }) {
                             const teacherRes = await profileAPI.getTeacherByREG(regNumber);
                             if (teacherRes.success && teacherRes.data) {
                                 setTeacherInfo(teacherRes.data);
+                                console.log('Teacher info loaded from fallback:', teacherRes.data);
                             }
                         } catch (error) {
                             console.error('Error loading teacher info from fallback:', error);
@@ -168,6 +169,7 @@ function Student({ Email }) {
                         const teacherRes = await profileAPI.getTeacherByREG(regNumber);
                         if (teacherRes.success && teacherRes.data) {
                             setTeacherInfo(teacherRes.data);
+                            console.log('Teacher info loaded from error fallback:', teacherRes.data);
                         }
                     } catch (error) {
                         console.error('Error loading teacher info from fallback:', error);
@@ -204,88 +206,36 @@ function Student({ Email }) {
         console.log('UserType being loaded:', userType);
         console.log('Is Teacher?', user?.UserType === 'Teacher');
         console.log('Teacher Info:', teacherInfo);
-        console.log('Teacher Info Loading:', teacherInfoLoading);
         
         try {
             if (userType === "Student") {
+                // CRITICAL: Backend already filters students for teachers!
+                // The /users?userType=Student endpoint returns:
+                // - For Admins: ALL students
+                // - For Teachers: ONLY students in their assigned classes
+                // So we don't need complex frontend filtering
+                
                 const res = await usersAPI.getAll('Student');
                 console.log('Students API Response:', res);
                 
                 if (res.success) {
                     let filtered = res.data || [];
-                    console.log('All students:', filtered.length);
+                    console.log(`Students received from backend (already filtered by backend for teachers): ${filtered.length}`);
 
-                    // Filter by name search
+                    // Only apply name search filter on frontend
                     if (studentSearch) {
                         filtered = filtered.filter(u =>
                             u.Name?.toLowerCase().includes(studentSearch.toLowerCase())
                         );
-                        console.log('After name filter:', filtered.length);
+                        console.log('After name search filter:', filtered.length);
                     }
 
-                    // For teachers, filter by assigned classes
-                    if (user?.UserType === 'Teacher') {
-                        console.log('Processing teacher filter...');
-                        console.log('Teacher Info Available:', !!teacherInfo);
-                        console.log('Teacher ClassAssigned:', teacherInfo?.ClassAssigned);
+                    // For admins ONLY: apply class filter if selected
+                    // (Teachers don't see this dropdown - backend already filtered)
+                    if (user?.UserType === 'Admin' && studentClass) {
+                        console.log('Admin class filter selected:', studentClass);
                         
-                        if (!teacherInfo?.ClassAssigned || teacherInfo.ClassAssigned.length === 0) {
-                            console.log('Teacher has no assigned classes - showing empty list');
-                            setStudents([]);
-                            return;
-                        }
-                        
-                        console.log('Fetching class enrollment for each student...');
-                        
-                        // Use Promise.allSettled to handle individual failures gracefully
-                        const studentsWithClassPromises = filtered.map(async (student) => {
-                            try {
-                                const profileRes = await profileAPI.getByUserID(student.UserID);
-                                if (profileRes.success && profileRes.data?.REG) {
-                                    const studentRes = await profileAPI.getStudentByREG(profileRes.data.REG);
-                                    if (studentRes.success && studentRes.data) {
-                                        console.log(`Student ${student.Name} - Class: ${studentRes.data.ClassEnrolled}`);
-                                        return {
-                                            ...student,
-                                            ClassEnrolled: studentRes.data.ClassEnrolled
-                                        };
-                                    }
-                                }
-                            } catch (error) {
-                                console.error('Error loading class for student:', student.Name, error);
-                            }
-                            return null;
-                        });
-                        
-                        const studentsWithClassResults = await Promise.allSettled(studentsWithClassPromises);
-                        
-                        // Extract successful results
-                        const studentsWithClass = studentsWithClassResults
-                            .filter(result => result.status === 'fulfilled' && result.value !== null)
-                            .map(result => result.value);
-                        
-                        console.log('Students with class info loaded:', studentsWithClass.length);
-                        
-                        // Filter by teacher's classes
-                        const teacherClasses = teacherInfo.ClassAssigned.map(c => parseInt(c));
-                        console.log('Teacher assigned classes (parsed):', teacherClasses);
-                        
-                        filtered = studentsWithClass.filter(s => {
-                            if (!s || s.ClassEnrolled === undefined || s.ClassEnrolled === null) {
-                                return false;
-                            }
-                            const studentClass = parseInt(s.ClassEnrolled);
-                            const isInTeacherClass = !isNaN(studentClass) && teacherClasses.includes(studentClass);
-                            console.log(`Student ${s.Name} - Class ${studentClass} - In teacher class: ${isInTeacherClass}`);
-                            return isInTeacherClass;
-                        });
-                        
-                        console.log('Students in teacher classes (final):', filtered.length);
-                    } 
-                    // For admins with class filter
-                    else if (studentClass) {
-                        console.log('Processing admin class filter...');
-                        
+                        // Need to fetch class info for each student to filter
                         const studentsWithClassPromises = filtered.map(async (student) => {
                             try {
                                 const profileRes = await profileAPI.getByUserID(student.UserID);
@@ -314,7 +264,7 @@ function Student({ Email }) {
                             s && s.ClassEnrolled === parseInt(studentClass)
                         );
                         
-                        console.log('Students in selected class:', filtered.length);
+                        console.log('After admin class filter:', filtered.length);
                     }
 
                     console.log('Final students to display:', filtered.length);
@@ -324,7 +274,7 @@ function Student({ Email }) {
                     setStudents([]);
                 }
             } else {
-                // Loading teachers
+                // Loading teachers - same for both admins and teachers
                 console.log('Loading teachers...');
                 const res = await usersAPI.getAll('Teacher');
                 if (res.success) {
@@ -994,7 +944,7 @@ function Student({ Email }) {
                 )}
             </div>
 
-            {/* Create Form - Only show for admins, or for teachers when creating students */}
+            {/* Create Form */}
             {showCreateForm && (isAdmin || (isTeacher && userType === "Student")) && (
                 <div style={{
                     backgroundColor: '#FEFEFE',
@@ -1211,7 +1161,7 @@ function Student({ Email }) {
                 </div>
             )}
 
-            {/* Edit Form - Only show for admins, or for teachers when editing students */}
+            {/* Edit Form */}
             {showEditForm && (isAdmin || (isTeacher && editUser.userType === 'Student')) && (
                 <div style={{
                     backgroundColor: '#FFF9E6',
@@ -1547,7 +1497,6 @@ function Student({ Email }) {
                         </div>
                     )
                 ) : (
-                    /* Teachers view - only show for Admin */
                     isAdmin ? (
                         teachers.length > 0 ? (
                             teachers.map((teacher, index) => (
