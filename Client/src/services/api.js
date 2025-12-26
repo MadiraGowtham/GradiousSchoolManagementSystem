@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://gradiousschoolmanagementsystem.onrender.com';
+const API_BASE_URL = 'https://gradiousschoolmanagementsystem.onrender.com/api';
 
 // Helper function to get auth token
 const getAuthToken = () => {
@@ -253,5 +253,6 @@ export default {
   profile: profileAPI,
   exam: examAPI,
 };
+
 
 
