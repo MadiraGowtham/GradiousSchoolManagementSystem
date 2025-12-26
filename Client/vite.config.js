@@ -15,4 +15,10 @@ export default defineConfig({
       '@assets': path.resolve(__dirname, '../Assets'),
     },
   },
+  server: {
+    historyApiFallback: true, // Fixes "Not Found" on reload
+  },
+  preview: {
+    historyApiFallback: true, // Also fixes it for production preview
+  },
 })
