@@ -508,7 +508,6 @@ function Student({ Email }) {
                     return;
                 }
 
-                // Validate class enrollment for teachers
                 if (user?.UserType === 'Teacher' && teacherInfo?.ClassAssigned) {
                     const selectedClass = parseInt(newStudent.classEnrolled);
                     const teacherClasses = teacherInfo.ClassAssigned.map(c => parseInt(c));
@@ -547,7 +546,6 @@ function Student({ Email }) {
                     throw new Error(response?.message || 'Failed to create student');
                 }
             } else {
-                // Only admins can create teachers
                 if (user?.UserType !== 'Admin') {
                     alert('Only administrators can create teacher accounts');
                     return;
@@ -592,7 +590,6 @@ function Student({ Email }) {
         } catch (error) {
             console.error('Error creating user:', error);
             
-            // Handle specific error cases
             let errorMessage = 'Failed to create user';
             
             if (error.message && error.message !== 'Failed to create user') {
@@ -605,7 +602,6 @@ function Student({ Email }) {
                 errorMessage = `Error: ${error.response.statusText}`;
             }
             
-            // Handle permission errors specifically
             if (errorMessage.toLowerCase().includes('permission') || 
                 errorMessage.toLowerCase().includes('unauthorized') ||
                 errorMessage.toLowerCase().includes('forbidden') ||
@@ -613,7 +609,6 @@ function Student({ Email }) {
                 errorMessage = 'You do not have permission to create this user. Please contact an administrator.';
             }
             
-            // Handle duplicate errors
             if (errorMessage.toLowerCase().includes('duplicate') || 
                 errorMessage.toLowerCase().includes('already exists')) {
                 errorMessage = 'A user with this email or registration number already exists.';
@@ -1162,7 +1157,9 @@ function Student({ Email }) {
             )}
 
             {/* Edit Form */}
-            {showEditForm && (isAdmin || (isTeacher && editUser.userType === 'Student')) && (
+            {showEditForm && (
+    isAdmin || (isTeacher && editUser.userType === 'Student')
+) && (
                 <div style={{
                     backgroundColor: '#FFF9E6',
                     padding: '30px',
