@@ -94,11 +94,13 @@ export const usersAPI = {
       
       if (!token) {
         console.error('No authentication token found');
-        return { success: false, message: 'Authentication token not found. Please log in again.' };
+        throw new Error('Authentication token not found. Please log in again.');
       }
       
+      console.log('=== API DELETE DEBUG ===');
       console.log('Deleting user with ID:', userID);
-      console.log('Using token:', token ? 'Token exists' : 'No token');
+      console.log('Token exists:', !!token);
+      console.log('Token preview:', token ? token.substring(0, 20) + '...' : 'none');
       
       const response = await fetch(`${API_BASE_URL}/users/${userID}`, {
         method: 'DELETE',
@@ -108,17 +110,29 @@ export const usersAPI = {
         }
       });
       
-      const data = await response.json();
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      // Try to parse JSON response
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Invalid response from server');
+      }
+      
+      console.log('Response data:', data);
       
       if (!response.ok) {
         console.error('Delete failed:', data);
-        throw new Error(data.message || 'Failed to delete user');
+        throw new Error(data.message || `Server error: ${response.status}`);
       }
       
       return data;
     } catch (error) {
-      console.error('Error deleting user:', error);
-      return { success: false, message: error.message };
+      console.error('Error in delete API call:', error);
+      throw error;
     }
   }
 };
@@ -259,7 +273,6 @@ export const examAPI = {
     });
   },
 };
-
 
 export default {
   auth: authAPI,
