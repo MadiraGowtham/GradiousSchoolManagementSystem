@@ -33,13 +33,18 @@ const startServer = async () => {
     const PORT = process.env.PORT || 5000;
 
     // Middleware
-    app.use(cors());
+    app.use(cors({
+      origin: ['http://localhost:5173', 'http://localhost:3000'], // Add your frontend URLs
+      credentials: true
+    }));
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     
-    // Serve static files for uploaded images
-    app.use('/uploads', express.static(join(__dirname, '../Client/public/uploads')));
-
+    // Serve static files for uploaded images from Server/uploads
+    const uploadsPath = join(__dirname, 'uploads');
+    app.use('/uploads', express.static(uploadsPath));
+    console.log('✓ Serving static files from:', uploadsPath);
+    
     // Routes
     app.use('/api/auth', authRoutes);
     app.use('/api/users', userRoutes);
@@ -109,6 +114,7 @@ const startServer = async () => {
       console.log(`\n🚀 Server is running on port ${PORT}`);
       console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
       console.log(`📊 Database: ${mongoose.connection.db.databaseName}`);
+      console.log(`📁 Uploads directory: ${uploadsPath}`);
       console.log(`💡 View collections in MongoDB Compass: mongodb://localhost:27017/${mongoose.connection.db.databaseName}\n`);
     });
     
@@ -120,4 +126,3 @@ const startServer = async () => {
 
 // Start the server
 startServer();
-
