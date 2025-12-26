@@ -407,7 +407,7 @@ function Dashboard() {
         alignItems: 'center', 
         height: '100vh',
         fontSize: '1.2rem',
-        color: '#FE6D36'
+        color: '#1025a1'
       }}>
         Loading...
       </div>
@@ -433,10 +433,10 @@ function Dashboard() {
     <div className='dashboard-container'>
       <h1>Welcome {user.Name || user.Email}!</h1>
       {user.UserType === "Student" && studentGrade && (
-        <h3 style={{ margin: "-35px 0px 70px 0px" }}>Grade: {studentGrade.ClassEnrolled}</h3>
+        <h3 style={{ margin: "10px 0px 70px 0px" }}>Grade: {studentGrade.ClassEnrolled}</h3>
       )}
       {user.UserType === "Teacher" && teacherInfo && (
-        <h3 style={{ margin: "-35px 0px 70px 0px" }}>Subject: {teacherInfo.Subject}</h3>
+        <h3 style={{ margin: "10px 0px 70px 0px" }}>Subject: {teacherInfo.Subject}</h3>
       )}
       {user.UserType === "Admin" && (
         <h3 style={{ margin: "10px 0px 70px 0px" }}>Administrator</h3>
