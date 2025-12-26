@@ -96,7 +96,7 @@ const startServer = async () => {
       });
     });
     app.listen(PORT, () => {
-      console.log\n🚀 Server is running on port ${PORT});
+      console.log🚀 Server is running on port ${PORT});
       console.log🌐 API Base URL: http://localhost:${PORT}/api);
       console.log📊 Database: ${mongoose.connection.db.databaseName});
       console.log💡 View collections in MongoDB Compass: mongodb://localhost:27017/${mongoose.connection.db.databaseName}\n);
@@ -109,3 +109,4 @@ const startServer = async () => {
 };
 // Start the server
 startServer();
+
