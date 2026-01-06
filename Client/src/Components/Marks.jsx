@@ -435,7 +435,7 @@ function Marks() {
                 <option value="">-- Select Exam --</option>
                 {exams.length > 0 ? (
                   exams.map(ex => (
-                    <option key={ex._id} value={ex.name}>{ex.name}</option>
+                    <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
                   ))
                 ) : (
                   <option value="" disabled>No exams available</option>
@@ -501,7 +501,7 @@ function Marks() {
                   <option value="">-- Select Exam --</option>
                   {exams.length > 0 ? (
                     exams.map(ex => (
-                      <option key={ex._id} value={ex.name}>{ex.name}</option>
+                      <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
                     ))
                   ) : (
                     <option value="" disabled>No exams available</option>
@@ -740,7 +740,7 @@ function Marks() {
                     >
                       <option value="">-- Select Exam --</option>
                       {exams.map(ex => (
-                        <option key={ex._id} value={ex.name}>{ex.name}</option>
+                        <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
                       ))}
                     </select>
                   </div>
