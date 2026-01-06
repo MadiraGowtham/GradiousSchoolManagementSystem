@@ -42,8 +42,11 @@ router.post('/', authenticate, authorize('Teacher', 'Admin'), async (req, res) =
   try {
     const { REG, Class, Subject, MarksObtained, Exam, Remarks } = req.body;
 
+    console.log('Received mark creation request:', req.body);
+
     // Validate required fields
     if (!REG || Class === undefined || !Subject || MarksObtained === undefined || !Exam) {
+      console.log('Missing required fields');
       return res.status(400).json({ 
         success: false, 
         message: 'Missing required fields: REG, Class, Subject, MarksObtained, and Exam are required' 
@@ -53,25 +56,44 @@ router.post('/', authenticate, authorize('Teacher', 'Admin'), async (req, res) =
     // Validate marks range
     const marksNum = parseInt(MarksObtained);
     if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
+      console.log('Invalid marks range:', MarksObtained);
       return res.status(400).json({ success: false, message: 'Marks must be between 0 and 100' });
     }
 
     // Validate class
     const classNum = parseInt(Class);
     if (isNaN(classNum) || classNum < 1 || classNum > 12) {
+      console.log('Invalid class:', Class);
       return res.status(400).json({ success: false, message: 'Class must be between 1 and 12' });
     }
 
     // Verify student exists and belongs to the specified class
-    const student = await Student.findOne({ REG });
+    console.log('Looking for student with REG:', REG);
+    const student = await Student.findOne({ REG: REG });
+    
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      console.log('Student not found:', REG);
+      console.log('Available students:', await Student.find({}).select('REG Name'));
+      return res.status(404).json({ success: false, message: `Student not found with REG: ${REG}` });
     }
 
+    console.log('Found student:', student.REG, 'in class:', student.ClassEnrolled);
+
     if (student.ClassEnrolled !== classNum) {
+      console.log(`Class mismatch: Student in ${student.ClassEnrolled}, trying to add for ${classNum}`);
       return res.status(400).json({ 
         success: false, 
-        message: `Student is enrolled in class ${student.ClassEnrolled}, not class ${classNum}` 
+        message: `Student ${REG} is enrolled in class ${student.ClassEnrolled}, not class ${classNum}` 
+      });
+    }
+
+    // Check for duplicate
+    const existingMark = await Marks.findOne({ REG, Subject, Exam });
+    if (existingMark) {
+      console.log('Duplicate mark found:', existingMark);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Result already exists for ${REG} in ${Subject} for ${Exam}` 
       });
     }
 
@@ -83,16 +105,28 @@ router.post('/', authenticate, authorize('Teacher', 'Admin'), async (req, res) =
       Exam,
       Remarks: Remarks || ''
     });
+    
     await mark.save();
+    console.log('Mark created successfully:', mark);
 
     res.status(201).json({ success: true, data: mark });
   } catch (error) {
+    console.error('Error creating mark:', error);
+    
     if (error.code === 11000) {
       return res.status(400).json({ 
         success: false, 
         message: 'Result already exists for this student, subject, and exam' 
       });
     }
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: Object.values(error.errors).map(e => e.message).join(', ')
+      });
+    }
+    
     res.status(500).json({ success: false, message: error.message });
   }
 });
