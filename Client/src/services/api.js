@@ -7,7 +7,7 @@ const getAuthToken = () => {
          localStorage.getItem('authToken');
 };
 
-// Helper function to make API requests
+// Helper function to make API requests with IMPROVED ERROR HANDLING
 const apiRequest = async (endpoint, options = {}) => {
   const token = getAuthToken();
   const headers = {
@@ -22,16 +22,44 @@ const apiRequest = async (endpoint, options = {}) => {
   };
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-    const data = await response.json();
+    console.log(`🌐 API Request: ${options.method || 'GET'} ${endpoint}`);
+    if (options.body) {
+      console.log('📦 Request body:', JSON.parse(options.body));
+    }
 
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    
+    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+    
+    // Try to parse response as JSON
+    let data;
+    try {
+      data = await response.json();
+      console.log('📥 Response data:', data);
+    } catch (parseError) {
+      console.error('❌ Failed to parse response as JSON:', parseError);
+      throw new Error('Invalid response from server');
+    }
+
+    // If response is not OK, create a detailed error
     if (!response.ok) {
-      throw new Error(data.message || 'An error occurred');
+      const error = new Error(data.message || `HTTP Error: ${response.status}`);
+      error.response = {
+        status: response.status,
+        statusText: response.statusText,
+        data: data
+      };
+      console.error('❌ API Error Response:', error.response);
+      throw error;
     }
 
     return data;
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('❌ API Error:', error);
+    // Re-throw with more context if it's a network error
+    if (!error.response) {
+      error.message = `Network error: ${error.message}`;
+    }
     throw error;
   }
 };
@@ -113,7 +141,6 @@ export const usersAPI = {
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
       
-      // Try to parse JSON response
       let data;
       try {
         data = await response.json();
@@ -137,7 +164,7 @@ export const usersAPI = {
   }
 };
 
-// Marks API
+// Marks API - FIXED
 export const marksAPI = {
   getAll: async (filters = {}) => {
     const queryParams = new URLSearchParams();
@@ -151,12 +178,14 @@ export const marksAPI = {
     return apiRequest(`/marks/student/${reg}`);
   },
   create: async (markData) => {
+    console.log('📝 Creating mark with data:', markData);
     return apiRequest('/marks', {
       method: 'POST',
       body: JSON.stringify(markData),
     });
   },
   update: async (id, markData) => {
+    console.log('✏️ Updating mark:', id, markData);
     return apiRequest(`/marks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(markData),
