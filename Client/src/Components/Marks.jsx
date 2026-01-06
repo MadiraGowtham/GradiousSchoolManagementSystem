@@ -23,6 +23,7 @@ function Marks() {
   const [subjects, setSubjects] = useState([]);
   const [newResult, setNewResult] = useState({
     REG: "",
+    Class: "",
     Subject: "",
     MarksObtained: "",
     Exam: "",
@@ -55,7 +56,7 @@ function Marks() {
           
           if (userData.UserType === 'Student' && userData.ClassEnrolled) {
             setStudentGrade({ ClassEnrolled: userData.ClassEnrolled });
-    }
+          }
         }
 
         await loadInitialData();
@@ -97,49 +98,61 @@ function Marks() {
       // Load classes
       const classesRes = await timetableAPI.getAll();
       if (classesRes.success) {
-        const classNumbers = classesRes.data.map(c => c.Class);
+        const classNumbers = [...new Set(classesRes.data.map(c => c.Class))].sort((a, b) => a - b);
         setAvailableClasses(classNumbers);
       }
 
       // Load marks
       await loadMarks();
 
-        // Load subjects from classes
-        if (classesRes.success && classesRes.data.length > 0) {
-          const allSubjects = new Set();
-          classesRes.data.forEach(cls => {
-            if (cls.TimeTable) {
-              const timetable = cls.TimeTable instanceof Map 
-                ? Object.fromEntries(cls.TimeTable) 
-                : cls.TimeTable;
-              Object.values(timetable).forEach(day => {
-                if (Array.isArray(day)) {
-                  day.forEach(slot => {
-                    if (slot.subject) allSubjects.add(slot.subject);
-                  });
-                }
-              });
-            }
-          });
-          setSubjects(Array.from(allSubjects));
-    }
-    
-        // Load exams from database
-        const examsRes = await examAPI.getAll();
-        if (examsRes.success) {
-          setExams(examsRes.data || []);
-        }
-      } catch (error) {
-        console.error('Error loading initial data:', error);
+      // Load subjects from classes
+      if (classesRes.success && classesRes.data.length > 0) {
+        const allSubjects = new Set();
+        classesRes.data.forEach(cls => {
+          if (cls.TimeTable) {
+            const timetable = cls.TimeTable instanceof Map 
+              ? Object.fromEntries(cls.TimeTable) 
+              : cls.TimeTable;
+            Object.values(timetable).forEach(day => {
+              if (Array.isArray(day)) {
+                day.forEach(slot => {
+                  if (slot.subject) allSubjects.add(slot.subject);
+                });
+              }
+            });
+          }
+        });
+        setSubjects(Array.from(allSubjects).sort());
       }
-    };
+    
+      // Load exams from database
+      const examsRes = await examAPI.getAll();
+      if (examsRes.success) {
+        setExams(examsRes.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    }
+  };
 
   const loadMarks = async () => {
     try {
       const filters = {};
+      
+      // If student, only load their marks
       if (user?.UserType === 'Student' && profile?.REG) {
         filters.reg = profile.REG;
-    }
+      }
+      
+      // If teacher/admin, apply class filter if selected
+      if ((user?.UserType === 'Teacher' || user?.UserType === 'Admin') && classes) {
+        filters.class = classes;
+      }
+      
+      // Apply exam filter if selected
+      if (exam) {
+        filters.exam = exam;
+      }
     
       const res = await marksAPI.getAll(filters);
       if (res.success) {
@@ -156,16 +169,17 @@ function Marks() {
   const applyFilters = (marksData) => {
     let filtered = [...marksData];
 
+    // Filter by class if selected
     if (classes) {
-      // Filter by class - need to get students in that class
-      // For now, we'll filter by REG pattern or use all marks
-      // In production, you'd have a better API endpoint
+      filtered = filtered.filter(m => m.Class === parseInt(classes));
     }
 
+    // Filter by exam if selected
     if (exam) {
       filtered = filtered.filter(m => m.Exam === exam);
     }
 
+    // Filter by search (REG number)
     if (search) {
       filtered = filtered.filter(m => 
         m.REG?.toLowerCase().includes(search.toLowerCase())
@@ -176,8 +190,14 @@ function Marks() {
   };
 
   useEffect(() => {
+    if (user) {
+      loadMarks();
+    }
+  }, [classes, exam]);
+
+  useEffect(() => {
     applyFilters(allMarks);
-  }, [classes, exam, search]);
+  }, [search]);
 
   useEffect(() => {
     if (user?.UserType === 'Student' && profile?.REG) {
@@ -192,6 +212,7 @@ function Marks() {
     setEditingKey(editKey);
     setEditData({
       REG: data.REG,
+      Class: data.Class,
       MarksObtained: data.MarksObtained,
       Subject: data.Subject,
       Exam: data.Exam,
@@ -206,15 +227,15 @@ function Marks() {
     try {
       const res = await marksAPI.update(editData._id, {
         MarksObtained: parseInt(editData.MarksObtained) || editData.MarksObtained,
-          Remarks: editData.Remarks
-    });
+        Remarks: editData.Remarks
+      });
     
       if (res.success) {
         await loadMarks();
-    alert("Marks updated successfully!");
+        alert("Marks updated successfully!");
         setEditingKey(null);
         setEditData(null);
-  }
+      }
     } catch (error) {
       console.error('Error updating marks:', error);
       alert("Failed to update marks");
@@ -233,6 +254,49 @@ function Marks() {
     }));
   };
 
+  const handleAddResult = async (e) => {
+    e.preventDefault();
+    
+    if (!newResult.REG || !newResult.Class || !newResult.Subject || !newResult.MarksObtained || !newResult.Exam) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    const marks = parseInt(newResult.MarksObtained);
+    if (isNaN(marks) || marks < 0 || marks > 100) {
+      alert("Marks must be between 0 and 100");
+      return;
+    }
+
+    try {
+      const res = await marksAPI.create({
+        REG: newResult.REG.toUpperCase(),
+        Class: parseInt(newResult.Class),
+        Subject: newResult.Subject,
+        MarksObtained: marks,
+        Exam: newResult.Exam,
+        Remarks: newResult.Remarks || ''
+      });
+
+      if (res.success) {
+        alert("Result added successfully!");
+        setShowAddForm(false);
+        setNewResult({
+          REG: "",
+          Class: "",
+          Subject: "",
+          MarksObtained: "",
+          Exam: "",
+          Remarks: ""
+        });
+        await loadMarks();
+      }
+    } catch (error) {
+      console.error('Error adding result:', error);
+      alert(error.response?.data?.message || "Failed to add result");
+    }
+  };
+
   const handleNewResultChange = (field, value) => {
     setNewResult(prev => ({
       ...prev,
@@ -240,256 +304,315 @@ function Marks() {
     }));
   };
 
-  const handleAddResult = async (e) => {
+  const handleAddExam = async (e) => {
     e.preventDefault();
     
-    if (!newResult.REG || !newResult.Subject || !newResult.MarksObtained || !newResult.Exam) {
-      alert("Please fill all required fields");
-      return;
-    }
-
-    const marksNum = parseInt(newResult.MarksObtained);
-    if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-      alert("Marks must be between 0 and 100");
-      return;
-    }
-
-    try {
-      const res = await marksAPI.create({
-      REG: newResult.REG,
-      Subject: newResult.Subject,
-      MarksObtained: marksNum,
-      Exam: newResult.Exam,
-        Remarks: newResult.Remarks || ""
-      });
-
-      if (res.success) {
-        await loadMarks();
-    alert("Result added successfully!");
-        setNewResult({
-      REG: "",
-      Subject: "",
-      MarksObtained: "",
-      Exam: "",
-      Remarks: ""
-    });
-        setShowAddForm(false);
-  }
-    } catch (error) {
-      console.error('Error adding result:', error);
-      alert(error.message || "Failed to add result");
-    }
-  };
-
-  const handleAddNewExam = async (e) => {
-    e.preventDefault();
-    
-    const trimmedExamName = newExamName.trim();
-    
-    if (!trimmedExamName) {
+    if (!newExamName.trim()) {
       alert("Please enter an exam name");
       return;
     }
 
     try {
-      const res = await examAPI.create({
-        ExamName: trimmedExamName,
-        Description: ''
-      });
+      const res = await examAPI.create({ name: newExamName.trim() });
       
       if (res.success) {
-        setExams(prev => [...prev, res.data]);
-    alert(`Exam "${trimmedExamName}" created successfully!`);
-        setNewExamName("");
+        alert("Exam created successfully!");
         setShowNewExamForm(false);
-  }
+        setNewExamName("");
+        
+        // Reload exams
+        const examsRes = await examAPI.getAll();
+        if (examsRes.success) {
+          setExams(examsRes.data || []);
+        }
+      }
     } catch (error) {
       console.error('Error creating exam:', error);
-      alert(error.message || "Failed to create exam");
+      alert(error.response?.data?.message || "Failed to create exam");
     }
-  };
-
-  const getAllExams = () => {
-    const examNames = exams.map(e => e.ExamName);
-    const dbExams = [...new Set(allMarks.map(m => m.Exam))];
-    const allExams = [...new Set([...examNames, ...dbExams])];
-    return allExams.sort();
   };
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
-        fontSize: '1.2rem',
-        color: '#FE6D36'
+        fontSize: '1.5rem',
+        color: '#666'
       }}>
         Loading...
       </div>
     );
   }
 
-  if (!user) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        fontSize: '1.2rem',
-        color: '#FD3012'
-      }}>
-        Please log in to view marks
-      </div>
-    );
-  }
+  if (!user) return null;
 
-  const user_REG = profile?.REG || user.REG;
+  const user_REG = profile?.REG || user?.REG;
 
   return (
-        <div className="marks">
-      <h1>Examination Marks</h1>
-      
-      {user.UserType === "Student" && (
-          <div className="exam-selection">
-          <select onChange={(e) => setExam(e.target.value)} value={exam}>
-              <option value="">Select Exam</option>
-            {getAllExams().map((examName) => (
-                  <option key={examName} value={examName}>
-                    {examName}
-                  </option>
-            ))}
-            </select>
-        </div>
-      )}
+    <div className="marks-container" style={{padding: '20px', maxWidth: '1400px', margin: '0 auto'}}>
+      <h1 style={{
+        textAlign: 'center',
+        color: '#FE6D36',
+        marginBottom: '30px',
+        fontSize: '2.5rem',
+        fontWeight: 'bold'
+      }}>
+        📊 Marks Management
+      </h1>
 
-      {(user.UserType === "Teacher" || user.UserType === "Admin") && (
-        <>
-          <div className="exam-selection">
-            <select onChange={(e) => setClasses(e.target.value)} value={classes}>
-              <option value="">Select Grade</option>
-              {availableClasses.map((gradeNum) => (
-                    <option key={gradeNum} value={gradeNum}>
-                  Class {gradeNum}
-                    </option>
-              ))}
-            </select>
-            <select onChange={(e) => setExam(e.target.value)} value={exam}>
-              <option value="">Select Exam</option>
-              {getAllExams().map((examName) => (
-                  <option key={examName} value={examName}>
-                    {examName}
-                  </option>
-              ))}
-            </select>
-            <button 
-              onClick={() => setShowNewExamForm(!showNewExamForm)}
-              style={{
-                marginLeft: '10px', 
-                padding: '8px 16px',
-                backgroundColor: '#9C27B0',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
-              {showNewExamForm ? 'Cancel' : '+ New Exam'}
-            </button>
-            <input 
-              type="text" 
-              placeholder="Search by Registration Number" 
-              onChange={(e) => setSearch(e.target.value)} 
-              value={search} 
-              style={{ marginLeft: '10px', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd' }}
-            />
-            <button 
-              onClick={() => {
-                setClasses("");
-                setExam("");
-                setSearch("");
-              }}
-              style={{marginLeft: '10px', padding: '8px 16px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer'}}
-            >
-              Clear Filters
-            </button>
-            {classes && (
-              <button 
-                onClick={() => setShowAddForm(!showAddForm)}
+      {/* Filters Section */}
+      <div style={{
+        backgroundColor: 'white',
+        padding: '25px',
+        borderRadius: '12px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        marginBottom: '30px'
+      }}>
+        <h2 style={{marginBottom: '20px', color: '#333', fontSize: '1.5rem'}}>Filters</h2>
+        
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: user.UserType === 'Student' ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '20px'
+        }}>
+          {user.UserType === "Student" && (
+            <div>
+              <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                Select Exam
+              </label>
+              <select
+                value={exam}
+                onChange={(e) => setExam(e.target.value)}
                 style={{
-                  marginLeft: '10px', 
-                  padding: '8px 16px',
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '2px solid #FDB5AB',
+                  fontSize: '1rem',
                   cursor: 'pointer'
                 }}
               >
-                {showAddForm ? 'Hide Form' : '+ Add New Result'}
-              </button>
-            )}
+                <option value="">-- Select Exam --</option>
+                {exams.map(ex => (
+                  <option key={ex._id} value={ex.name}>{ex.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(user.UserType === "Teacher" || user.UserType === "Admin") && (
+            <>
+              <div>
+                <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                  Class
+                </label>
+                <select
+                  value={classes}
+                  onChange={(e) => setClasses(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid #FDB5AB',
+                    fontSize: '1rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">-- Select Class --</option>
+                  {availableClasses.map(cls => (
+                    <option key={cls} value={cls}>Class {cls}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                  Exam
+                </label>
+                <select
+                  value={exam}
+                  onChange={(e) => setExam(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid #FDB5AB',
+                    fontSize: '1rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">-- Select Exam --</option>
+                  {exams.map(ex => (
+                    <option key={ex._id} value={ex.name}>{ex.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                  Search by REG
+                </label>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Enter REG number"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid #FDB5AB',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Action Buttons for Teachers/Admin */}
+      {(user.UserType === "Teacher" || user.UserType === "Admin") && (
+        <>
+          <div style={{
+            display: 'flex',
+            gap: '15px',
+            marginBottom: '30px',
+            flexWrap: 'wrap'
+          }}>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '1rem',
+                transition: 'all 0.3s'
+              }}
+            >
+              {showAddForm ? '✖ Cancel' : '➕ Add New Result'}
+            </button>
+
+            <button
+              onClick={() => setShowNewExamForm(!showNewExamForm)}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '1rem',
+                transition: 'all 0.3s'
+              }}
+            >
+              {showNewExamForm ? '✖ Cancel' : '📝 Create New Exam'}
+            </button>
           </div>
 
+          {/* New Exam Form */}
           {showNewExamForm && (
             <div style={{
-              backgroundColor: '#f3e5f5',
-              padding: '20px',
-              margin: '20px 0',
-              borderRadius: '8px',
-              border: '2px solid #9C27B0'
+              backgroundColor: '#f0f8ff',
+              padding: '25px',
+              borderRadius: '12px',
+              marginBottom: '30px',
+              border: '2px solid #2196F3'
             }}>
-              <h3 style={{marginTop: 0, color: '#9C27B0'}}>Create New Exam</h3>
-              <form onSubmit={handleAddNewExam} style={{display: 'flex', gap: '10px', alignItems: 'flex-end'}}>
-                <div style={{flex: 1}}>
-                  <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>
-                    Exam Name <span style={{color: 'red'}}>*</span>
+              <h3 style={{marginBottom: '20px', color: '#2196F3', fontSize: '1.3rem'}}>
+                Create New Exam
+              </h3>
+              <form onSubmit={handleAddExam}>
+                <div style={{marginBottom: '20px'}}>
+                  <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#333'}}>
+                    Exam Name *
                   </label>
                   <input
                     type="text"
                     value={newExamName}
                     onChange={(e) => setNewExamName(e.target.value)}
-                    placeholder="e.g., Mid2, Final2024, Quiz1"
+                    placeholder="e.g., Mid-Term, Final, Unit Test 1"
                     required
-                    style={{width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #9C27B0'}}
+                    style={{
+                      width: '100%',
+                      maxWidth: '400px',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '2px solid #2196F3',
+                      fontSize: '1rem'
+                    }}
                   />
                 </div>
-                <button 
-                  type="submit"
-                  style={{
-                    padding: '10px 24px',
-                    backgroundColor: '#9C27B0',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  Create Exam
-                </button>
+
+                <div style={{display: 'flex', gap: '10px'}}>
+                  <button
+                    type="submit"
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#2196F3',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    Create Exam
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewExamForm(false);
+                      setNewExamName("");
+                    }}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#f44336',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </form>
             </div>
           )}
 
-          {showAddForm && classes && (
+          {/* Add Result Form */}
+          {showAddForm && (
             <div style={{
-              backgroundColor: '#FEFEFE',
+              backgroundColor: '#f0fff4',
               padding: '25px',
-              margin: '20px 0',
-              borderRadius: '10px',
-              border: '2px solid #FE6D36',
-              boxShadow: '0 4px 12px rgba(254, 109, 54, 0.15)'
+              borderRadius: '12px',
+              marginBottom: '30px',
+              border: '2px solid #4CAF50'
             }}>
-              <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#FD3012' }}>Add New Result for Class {classes}</h3>
+              <h3 style={{marginBottom: '20px', color: '#4CAF50', fontSize: '1.3rem'}}>
+                Add New Result
+              </h3>
               <form onSubmit={handleAddResult}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '20px',
+                  marginBottom: '20px'
+                }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
-                      Registration Number (REG) <span style={{color: 'red'}}>*</span>
+                      REG Number *
                     </label>
                     <input
                       type="text"
@@ -503,7 +626,24 @@ function Marks() {
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
-                      Subject <span style={{color: 'red'}}>*</span>
+                      Class *
+                    </label>
+                    <select
+                      value={newResult.Class}
+                      onChange={(e) => handleNewResultChange('Class', e.target.value)}
+                      required
+                      style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
+                    >
+                      <option value="">-- Select Class --</option>
+                      {availableClasses.map(cls => (
+                        <option key={cls} value={cls}>Class {cls}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
+                      Subject *
                     </label>
                     <select
                       value={newResult.Subject}
@@ -511,18 +651,16 @@ function Marks() {
                       required
                       style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
                     >
-                      <option value="">Select Subject</option>
-                      {subjects.map(subject => (
-                          <option key={subject} value={subject}>
-                          {subject}
-                          </option>
+                      <option value="">-- Select Subject --</option>
+                      {subjects.map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
                       ))}
                     </select>
                   </div>
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
-                      Exam <span style={{color: 'red'}}>*</span>
+                      Exam *
                     </label>
                     <select
                       value={newResult.Exam}
@@ -530,18 +668,16 @@ function Marks() {
                       required
                       style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
                     >
-                      <option value="">Select Exam</option>
-                      {getAllExams().map(examName => (
-                        <option key={examName} value={examName}>
-                          {examName}
-                        </option>
+                      <option value="">-- Select Exam --</option>
+                      {exams.map(ex => (
+                        <option key={ex._id} value={ex.name}>{ex.name}</option>
                       ))}
                     </select>
                   </div>
 
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>
-                      Marks Obtained <span style={{color: 'red'}}>*</span>
+                      Marks Obtained (0-100) *
                     </label>
                     <input
                       type="number"
@@ -591,6 +727,7 @@ function Marks() {
                       setShowAddForm(false);
                       setNewResult({
                         REG: "",
+                        Class: "",
                         Subject: "",
                         MarksObtained: "",
                         Exam: "",
@@ -614,30 +751,44 @@ function Marks() {
             </div>
           )}
         </>
-          )}
+      )}
 
-          <div className="marks-table">
+      {/* Marks Table */}
+      <div className="marks-table" style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
         {user.UserType === "Student" && exam && (
-          <table>
+          <table style={{width: '100%', borderCollapse: 'collapse'}}>
             <thead>
-              <tr>
-                <th>REG.NO</th>
-                <th>Grade</th>
-                <th>Subject</th>
-                <th>Marks</th>
-                <th>Remarks</th>
-                <th>Exam</th>
+              <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
+                <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
               </tr>
             </thead>
             <tbody>
               {marks.filter(m => m.REG === user_REG && m.Exam === exam).map((data, idx) => (
-                <tr key={`${data._id || idx}`}>
-                  <td>{data.REG}</td>
-                  <td>{studentGrade?.ClassEnrolled || user.ClassEnrolled || 'N/A'}</td>
-                  <td>{data.Subject}</td>
-                  <td>{data.MarksObtained}</td>
-                  <td>{data.Remarks || '-'}</td>
-                  <td>{data.Exam}</td>
+                <tr key={`${data._id || idx}`} style={{
+                  borderBottom: '1px solid #eee',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                >
+                  <td style={{padding: '15px'}}>{data.REG}</td>
+                  <td style={{padding: '15px'}}>{data.Class}</td>
+                  <td style={{padding: '15px'}}>{data.Subject}</td>
+                  <td style={{padding: '15px', fontWeight: 'bold', color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'}}>
+                    {data.MarksObtained}
+                  </td>
+                  <td style={{padding: '15px'}}>{data.Remarks || '-'}</td>
+                  <td style={{padding: '15px'}}>{data.Exam}</td>
                 </tr>
               ))}
             </tbody>
@@ -645,119 +796,130 @@ function Marks() {
         )}
 
         {(user.UserType === "Teacher" || user.UserType === "Admin") && (classes || exam || search) && (
-              <table>
-                <thead>
-                  <tr>
-                    <th>REG.NO</th>
-                    <th>Grade</th>
-                    <th>Subject</th>
-                    <th>Marks</th>
-                    <th>Remarks</th>
-                    <th>Exam</th>
-                    <th>EDIT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marks.length > 0 ? (
-                    marks.map((data, index) => {
-                      const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
-                      const isEditing = editingKey === editKey;
-                      
-                      return (
-                    <tr key={`${data._id || index}`}>
-                          <td>{data.REG}</td>
-                      <td>{data.ClassEnrolled || 'N/A'}</td>
-                          <td>{data.Subject}</td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                value={editData?.MarksObtained || ''}
-                                onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
+          <table style={{width: '100%', borderCollapse: 'collapse'}}>
+            <thead>
+              <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
+                <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
+                <th style={{padding: '15px', textAlign: 'left'}}>EDIT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {marks.length > 0 ? (
+                marks.map((data, index) => {
+                  const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
+                  const isEditing = editingKey === editKey;
+                  
+                  return (
+                    <tr key={`${data._id || index}`} style={{
+                      borderBottom: '1px solid #eee',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                    >
+                      <td style={{padding: '15px'}}>{data.REG}</td>
+                      <td style={{padding: '15px'}}>{data.Class}</td>
+                      <td style={{padding: '15px'}}>{data.Subject}</td>
+                      <td style={{padding: '15px'}}>
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={editData?.MarksObtained || ''}
+                            onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
                             style={{width: '80px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                                min="0"
-                                max="100"
-                              />
-                            ) : (
-                              data.MarksObtained
-                            )}
-                          </td>
-                          <td>
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editData?.Remarks || ''}
-                                onChange={(e) => handleEditChange('Remarks', e.target.value)}
+                            min="0"
+                            max="100"
+                          />
+                        ) : (
+                          <span style={{
+                            fontWeight: 'bold',
+                            color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'
+                          }}>
+                            {data.MarksObtained}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{padding: '15px'}}>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData?.Remarks || ''}
+                            onChange={(e) => handleEditChange('Remarks', e.target.value)}
                             style={{width: '150px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                              />
-                            ) : (
+                          />
+                        ) : (
                           data.Remarks || '-'
-                            )}
-                          </td>
-                          <td>{data.Exam}</td>
-                          <td>
-                            {isEditing ? (
-                              <div style={{display: 'flex', gap: '5px'}}>
-                                <button 
-                                  onClick={handleSaveEdit}
-                                  style={{
+                        )}
+                      </td>
+                      <td style={{padding: '15px'}}>{data.Exam}</td>
+                      <td style={{padding: '15px'}}>
+                        {isEditing ? (
+                          <div style={{display: 'flex', gap: '5px'}}>
+                            <button 
+                              onClick={handleSaveEdit}
+                              style={{
                                 padding: '6px 12px',
-                                    backgroundColor: '#4CAF50',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
+                                backgroundColor: '#4CAF50',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
                                 fontSize: '0.85rem'
-                                  }}
-                                >
-                                  Save
-                                </button>
-                                <button 
-                                  onClick={handleCancelEdit}
-                                  style={{
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button 
+                              onClick={handleCancelEdit}
+                              style={{
                                 padding: '6px 12px',
-                                    backgroundColor: '#f44336',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
                                 cursor: 'pointer',
                                 fontSize: '0.85rem'
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button 
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
                             onClick={() => handleEdit(data)}
-                                style={{
+                            style={{
                               padding: '6px 16px',
                               backgroundColor: '#1025a1',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
                               cursor: 'pointer',
                               fontSize: '0.85rem',
                               fontWeight: '600'
-                                }}
-                              >
-                                Edit
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
                   <td colSpan="7" style={{textAlign: 'center', padding: '40px', color: '#666'}}>
                     No marks found for the selected filters
                   </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
 
         {user.UserType === "Student" && !exam && (
           <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
@@ -770,8 +932,8 @@ function Marks() {
             Please select filters to view marks
           </div>
         )}
-          </div>
-        </div>
+      </div>
+    </div>
   );
 }
 
