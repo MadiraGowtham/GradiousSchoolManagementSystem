@@ -99,9 +99,11 @@ function Marks() {
     try {
       // Load exams first (important for dropdown)
       const examsRes = await examAPI.getAll();
-      if (examsRes.success) {
-        console.log('Loaded exams:', examsRes.data);
-        setExams(examsRes.data || []);
+      if (examsRes.success && examsRes.data) {
+        // Filter out any invalid exam entries - using ExamName from backend
+        const validExams = examsRes.data.filter(ex => ex && (ex.ExamName || ex.name) && ex._id);
+        console.log('Loaded exams:', validExams);
+        setExams(validExams);
       } else {
         console.error('Failed to load exams:', examsRes);
         setExams([]);
@@ -346,7 +348,8 @@ function Marks() {
     }
 
     try {
-      const res = await examAPI.create({ name: newExamName.trim() });
+      // Use ExamName field to match backend schema
+      const res = await examAPI.create({ ExamName: newExamName.trim() });
       
       if (res.success) {
         alert("Exam created successfully!");
@@ -433,10 +436,13 @@ function Marks() {
                 }}
               >
                 <option value="">-- Select Exam --</option>
-                {exams.length > 0 ? (
-                  exams.map(ex => (
-                    <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
-                  ))
+                {exams && exams.length > 0 ? (
+                  exams
+                    .filter(ex => ex && ex._id && (ex.ExamName || ex.name)) // Support both field names
+                    .map(ex => {
+                      const examName = ex.ExamName || ex.name; // Use ExamName first, fallback to name
+                      return <option key={ex._id} value={examName}>{examName}</option>;
+                    })
                 ) : (
                   <option value="" disabled>No exams available</option>
                 )}
@@ -499,10 +505,13 @@ function Marks() {
                   }}
                 >
                   <option value="">-- Select Exam --</option>
-                  {exams.length > 0 ? (
-                    exams.map(ex => (
-                      <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
-                    ))
+                  {exams && exams.length > 0 ? (
+                    exams
+                      .filter(ex => ex && ex._id && (ex.ExamName || ex.name)) // Support both field names
+                      .map(ex => {
+                        const examName = ex.ExamName || ex.name; // Use ExamName first, fallback to name
+                        return <option key={ex._id} value={examName}>{examName}</option>;
+                      })
                   ) : (
                     <option value="" disabled>No exams available</option>
                   )}
@@ -536,6 +545,12 @@ function Marks() {
           <div style={{marginTop: '15px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '6px', fontSize: '0.85rem'}}>
             <strong>Debug Info:</strong>
             <div>Total Exams Loaded: {exams.length}</div>
+            <div>Valid Exams: {exams.filter(ex => ex && ex._id && (ex.ExamName || ex.name)).length}</div>
+            <div>Exams Data: {JSON.stringify(exams.slice(0, 3).map(ex => ({
+              _id: ex._id,
+              ExamName: ex.ExamName,
+              name: ex.name
+            })), null, 2)}</div>
             <div>Selected Exam: {exam || 'None'}</div>
             <div>Total Marks: {allMarks.length}</div>
             <div>Filtered Marks: {marks.length}</div>
@@ -739,9 +754,16 @@ function Marks() {
                       style={{width: '100%', padding: '10px', borderRadius: '6px', border: '2px solid #FDB5AB'}}
                     >
                       <option value="">-- Select Exam --</option>
-                      {exams.map(ex => (
-                        <option key={ex._id} value={ex.ExamName}>{ex.ExamName}</option>
-                      ))}
+                      {exams && exams.length > 0 ? (
+                        exams
+                          .filter(ex => ex && ex._id && (ex.ExamName || ex.name))
+                          .map(ex => {
+                            const examName = ex.ExamName || ex.name;
+                            return <option key={ex._id} value={examName}>{examName}</option>;
+                          })
+                      ) : (
+                        <option value="" disabled>No exams available</option>
+                      )}
                     </select>
                   </div>
 
