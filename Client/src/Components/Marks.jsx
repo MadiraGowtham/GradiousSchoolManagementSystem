@@ -59,18 +59,19 @@ function Marks() {
           }
         }
 
-        await loadInitialData();
+        await loadInitialData(userData);
       } else {
         // Fallback to localStorage
         const email = localStorage.getItem('Email');
         const userType = localStorage.getItem('UserType');
         if (email && userType) {
-          setUser({
+          const fallbackUser = {
             Email: email,
             UserType: userType,
             Name: localStorage.getItem('UserName') || 'User'
-          });
-          await loadInitialData();
+          };
+          setUser(fallbackUser);
+          await loadInitialData(fallbackUser);
         } else {
           navigate('/');
         }
@@ -81,32 +82,38 @@ function Marks() {
       const email = localStorage.getItem('Email');
       const userType = localStorage.getItem('UserType');
       if (email && userType) {
-        setUser({
+        const fallbackUser = {
           Email: email,
           UserType: userType,
           Name: localStorage.getItem('UserName') || 'User'
-        });
-        await loadInitialData();
+        };
+        setUser(fallbackUser);
+        await loadInitialData(fallbackUser);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const loadInitialData = async () => {
+  const loadInitialData = async (userData) => {
     try {
+      // Load exams first (important for dropdown)
+      const examsRes = await examAPI.getAll();
+      if (examsRes.success) {
+        console.log('Loaded exams:', examsRes.data);
+        setExams(examsRes.data || []);
+      } else {
+        console.error('Failed to load exams:', examsRes);
+        setExams([]);
+      }
+
       // Load classes
       const classesRes = await timetableAPI.getAll();
       if (classesRes.success) {
         const classNumbers = [...new Set(classesRes.data.map(c => c.Class))].sort((a, b) => a - b);
         setAvailableClasses(classNumbers);
-      }
-
-      // Load marks
-      await loadMarks();
-
-      // Load subjects from classes
-      if (classesRes.success && classesRes.data.length > 0) {
+        
+        // Load subjects from classes
         const allSubjects = new Set();
         classesRes.data.forEach(cls => {
           if (cls.TimeTable) {
@@ -124,14 +131,39 @@ function Marks() {
         });
         setSubjects(Array.from(allSubjects).sort());
       }
-    
-      // Load exams from database
-      const examsRes = await examAPI.getAll();
-      if (examsRes.success) {
-        setExams(examsRes.data || []);
+
+      // Load marks based on user type
+      if (userData) {
+        await loadMarksInitial(userData);
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
+    }
+  };
+
+  const loadMarksInitial = async (userData) => {
+    try {
+      const filters = {};
+      
+      // If student, only load their marks
+      if (userData?.UserType === 'Student' && (profile?.REG || userData?.REG)) {
+        filters.reg = profile?.REG || userData?.REG;
+      }
+    
+      const res = await marksAPI.getAll(filters);
+      if (res.success) {
+        console.log('Loaded marks:', res.data);
+        setAllMarks(res.data || []);
+        setMarks(res.data || []);
+      } else {
+        console.error('Failed to load marks:', res);
+        setAllMarks([]);
+        setMarks([]);
+      }
+    } catch (error) {
+      console.error('Error loading marks:', error);
+      setAllMarks([]);
+      setMarks([]);
     }
   };
 
@@ -140,8 +172,8 @@ function Marks() {
       const filters = {};
       
       // If student, only load their marks
-      if (user?.UserType === 'Student' && profile?.REG) {
-        filters.reg = profile.REG;
+      if (user?.UserType === 'Student' && (profile?.REG || user?.REG)) {
+        filters.reg = profile?.REG || user?.REG;
       }
       
       // If teacher/admin, apply class filter if selected
@@ -154,10 +186,16 @@ function Marks() {
         filters.exam = exam;
       }
     
+      console.log('Loading marks with filters:', filters);
       const res = await marksAPI.getAll(filters);
       if (res.success) {
+        console.log('Marks loaded:', res.data);
         setAllMarks(res.data || []);
         applyFilters(res.data || []);
+      } else {
+        console.error('Failed to load marks:', res);
+        setAllMarks([]);
+        setMarks([]);
       }
     } catch (error) {
       console.error('Error loading marks:', error);
@@ -186,26 +224,21 @@ function Marks() {
       );
     }
 
+    console.log('Filtered marks:', filtered);
     setMarks(filtered);
   };
 
+  // Effect to reload marks when filters change
   useEffect(() => {
     if (user) {
       loadMarks();
     }
   }, [classes, exam]);
 
+  // Effect to apply search filter on existing marks
   useEffect(() => {
     applyFilters(allMarks);
   }, [search]);
-
-  useEffect(() => {
-    if (user?.UserType === 'Student' && profile?.REG) {
-      loadMarks();
-    } else if (user?.UserType !== 'Student') {
-      loadMarks();
-    }
-  }, [user, profile]);
 
   const handleEdit = (data) => {
     const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
@@ -385,21 +418,34 @@ function Marks() {
               </label>
               <select
                 value={exam}
-                onChange={(e) => setExam(e.target.value)}
+                onChange={(e) => {
+                  console.log('Student selected exam:', e.target.value);
+                  setExam(e.target.value);
+                }}
                 style={{
                   width: '100%',
                   padding: '12px',
                   borderRadius: '8px',
                   border: '2px solid #FDB5AB',
                   fontSize: '1rem',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  backgroundColor: 'white'
                 }}
               >
                 <option value="">-- Select Exam --</option>
-                {exams.map(ex => (
-                  <option key={ex._id} value={ex.name}>{ex.name}</option>
-                ))}
+                {exams.length > 0 ? (
+                  exams.map(ex => (
+                    <option key={ex._id} value={ex.name}>{ex.name}</option>
+                  ))
+                ) : (
+                  <option value="" disabled>No exams available</option>
+                )}
               </select>
+              {exams.length === 0 && (
+                <p style={{color: '#f44336', fontSize: '0.85rem', marginTop: '5px'}}>
+                  No exams found. Please contact your teacher.
+                </p>
+              )}
             </div>
           )}
 
@@ -411,14 +457,18 @@ function Marks() {
                 </label>
                 <select
                   value={classes}
-                  onChange={(e) => setClasses(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Teacher/Admin selected class:', e.target.value);
+                    setClasses(e.target.value);
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    backgroundColor: 'white'
                   }}
                 >
                   <option value="">-- Select Class --</option>
@@ -434,20 +484,28 @@ function Marks() {
                 </label>
                 <select
                   value={exam}
-                  onChange={(e) => setExam(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Teacher/Admin selected exam:', e.target.value);
+                    setExam(e.target.value);
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px',
                     borderRadius: '8px',
                     border: '2px solid #FDB5AB',
                     fontSize: '1rem',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    backgroundColor: 'white'
                   }}
                 >
                   <option value="">-- Select Exam --</option>
-                  {exams.map(ex => (
-                    <option key={ex._id} value={ex.name}>{ex.name}</option>
-                  ))}
+                  {exams.length > 0 ? (
+                    exams.map(ex => (
+                      <option key={ex._id} value={ex.name}>{ex.name}</option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No exams available</option>
+                  )}
                 </select>
               </div>
 
@@ -472,6 +530,18 @@ function Marks() {
             </>
           )}
         </div>
+
+        {/* Debug Info - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{marginTop: '15px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '6px', fontSize: '0.85rem'}}>
+            <strong>Debug Info:</strong>
+            <div>Total Exams Loaded: {exams.length}</div>
+            <div>Selected Exam: {exam || 'None'}</div>
+            <div>Total Marks: {allMarks.length}</div>
+            <div>Filtered Marks: {marks.length}</div>
+            <div>User Type: {user?.UserType}</div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons for Teachers/Admin */}
@@ -760,177 +830,189 @@ function Marks() {
         overflow: 'hidden',
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
       }}>
-        {user.UserType === "Student" && exam && (
-          <table style={{width: '100%', borderCollapse: 'collapse'}}>
-            <thead>
-              <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
-                <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
-              </tr>
-            </thead>
-            <tbody>
-              {marks.filter(m => m.REG === user_REG && m.Exam === exam).map((data, idx) => (
-                <tr key={`${data._id || idx}`} style={{
-                  borderBottom: '1px solid #eee',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                >
-                  <td style={{padding: '15px'}}>{data.REG}</td>
-                  <td style={{padding: '15px'}}>{data.Class}</td>
-                  <td style={{padding: '15px'}}>{data.Subject}</td>
-                  <td style={{padding: '15px', fontWeight: 'bold', color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'}}>
-                    {data.MarksObtained}
-                  </td>
-                  <td style={{padding: '15px'}}>{data.Remarks || '-'}</td>
-                  <td style={{padding: '15px'}}>{data.Exam}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {(user.UserType === "Teacher" || user.UserType === "Admin") && (classes || exam || search) && (
-          <table style={{width: '100%', borderCollapse: 'collapse'}}>
-            <thead>
-              <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
-                <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
-                <th style={{padding: '15px', textAlign: 'left'}}>EDIT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {marks.length > 0 ? (
-                marks.map((data, index) => {
-                  const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
-                  const isEditing = editingKey === editKey;
-                  
-                  return (
-                    <tr key={`${data._id || index}`} style={{
-                      borderBottom: '1px solid #eee',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                    >
-                      <td style={{padding: '15px'}}>{data.REG}</td>
-                      <td style={{padding: '15px'}}>{data.Class}</td>
-                      <td style={{padding: '15px'}}>{data.Subject}</td>
-                      <td style={{padding: '15px'}}>
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editData?.MarksObtained || ''}
-                            onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
-                            style={{width: '80px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                            min="0"
-                            max="100"
-                          />
-                        ) : (
-                          <span style={{
-                            fontWeight: 'bold',
-                            color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'
-                          }}>
-                            {data.MarksObtained}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{padding: '15px'}}>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editData?.Remarks || ''}
-                            onChange={(e) => handleEditChange('Remarks', e.target.value)}
-                            style={{width: '150px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
-                          />
-                        ) : (
-                          data.Remarks || '-'
-                        )}
-                      </td>
-                      <td style={{padding: '15px'}}>{data.Exam}</td>
-                      <td style={{padding: '15px'}}>
-                        {isEditing ? (
-                          <div style={{display: 'flex', gap: '5px'}}>
-                            <button 
-                              onClick={handleSaveEdit}
-                              style={{
-                                padding: '6px 12px',
-                                backgroundColor: '#4CAF50',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              Save
-                            </button>
-                            <button 
-                              onClick={handleCancelEdit}
-                              style={{
-                                padding: '6px 12px',
-                                backgroundColor: '#f44336',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem'
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleEdit(data)}
-                            style={{
-                              padding: '6px 16px',
-                              backgroundColor: '#1025a1',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.85rem',
-                              fontWeight: '600'
-                            }}
-                          >
-                            Edit
-                          </button>
-                        )}
+        {user.UserType === "Student" && (
+          <>
+            {exam ? (
+              <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
+                    <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marks.filter(m => m.REG === user_REG && m.Exam === exam).length > 0 ? (
+                    marks.filter(m => m.REG === user_REG && m.Exam === exam).map((data, idx) => (
+                      <tr key={`${data._id || idx}`} style={{
+                        borderBottom: '1px solid #eee',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                      >
+                        <td style={{padding: '15px'}}>{data.REG}</td>
+                        <td style={{padding: '15px'}}>{data.Class}</td>
+                        <td style={{padding: '15px'}}>{data.Subject}</td>
+                        <td style={{padding: '15px', fontWeight: 'bold', color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'}}>
+                          {data.MarksObtained}
+                        </td>
+                        <td style={{padding: '15px'}}>{data.Remarks || '-'}</td>
+                        <td style={{padding: '15px'}}>{data.Exam}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" style={{textAlign: 'center', padding: '40px', color: '#666'}}>
+                        No marks found for {exam}
                       </td>
                     </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan="7" style={{textAlign: 'center', padding: '40px', color: '#666'}}>
-                    No marks found for the selected filters
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
+                Please select an exam to view your marks
+              </div>
+            )}
+          </>
         )}
 
-        {user.UserType === "Student" && !exam && (
-          <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
-            Please select an exam to view your marks
-          </div>
-        )}
-
-        {(user.UserType === "Teacher" || user.UserType === "Admin") && !classes && !exam && !search && (
-          <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
-            Please select filters to view marks
-          </div>
+        {(user.UserType === "Teacher" || user.UserType === "Admin") && (
+          <>
+            {(classes || exam || search) ? (
+              <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#FE6D36', color: 'white'}}>
+                    <th style={{padding: '15px', textAlign: 'left'}}>REG.NO</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Class</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Subject</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Marks</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Remarks</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>Exam</th>
+                    <th style={{padding: '15px', textAlign: 'left'}}>EDIT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marks.length > 0 ? (
+                    marks.map((data, index) => {
+                      const editKey = `${data.REG}-${data.Subject}-${data.Exam}`;
+                      const isEditing = editingKey === editKey;
+                      
+                      return (
+                        <tr key={`${data._id || index}`} style={{
+                          borderBottom: '1px solid #eee',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        >
+                          <td style={{padding: '15px'}}>{data.REG}</td>
+                          <td style={{padding: '15px'}}>{data.Class}</td>
+                          <td style={{padding: '15px'}}>{data.Subject}</td>
+                          <td style={{padding: '15px'}}>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editData?.MarksObtained || ''}
+                                onChange={(e) => handleEditChange('MarksObtained', e.target.value)}
+                                style={{width: '80px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
+                                min="0"
+                                max="100"
+                              />
+                            ) : (
+                              <span style={{
+                                fontWeight: 'bold',
+                                color: data.MarksObtained >= 60 ? '#4CAF50' : '#f44336'
+                              }}>
+                                {data.MarksObtained}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{padding: '15px'}}>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData?.Remarks || ''}
+                                onChange={(e) => handleEditChange('Remarks', e.target.value)}
+                                style={{width: '150px', padding: '6px', borderRadius: '4px', border: '2px solid #FE6D36'}}
+                              />
+                            ) : (
+                              data.Remarks || '-'
+                            )}
+                          </td>
+                          <td style={{padding: '15px'}}>{data.Exam}</td>
+                          <td style={{padding: '15px'}}>
+                            {isEditing ? (
+                              <div style={{display: 'flex', gap: '5px'}}>
+                                <button 
+                                  onClick={handleSaveEdit}
+                                  style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#4CAF50',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem'
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button 
+                                  onClick={handleCancelEdit}
+                                  style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#f44336',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem'
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => handleEdit(data)}
+                                style={{
+                                  padding: '6px 16px',
+                                  backgroundColor: '#1025a1',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '600'
+                                }}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="7" style={{textAlign: 'center', padding: '40px', color: '#666'}}>
+                        No marks found for the selected filters
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{textAlign: 'center', padding: '40px', color: '#666'}}>
+                Please select filters to view marks
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
