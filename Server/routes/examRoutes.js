@@ -1,261 +1,128 @@
+// Backend Exam Routes - exam.js
+// Place this file in your backend routes folder
+
 import express from 'express';
 import { authenticate, authorize } from '../middleware/auth.js';
-import Marks from '../models/Marks.js';
-import Student from '../models/Student.js';
+import Exam from '../models/Exam.js';
 
 const router = express.Router();
 
-// Get marks with filters
+// Get all exams
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { exam, class: classNum, reg, subject } = req.query;
-    let query = {};
-
-    if (exam) query.Exam = exam;
-    if (subject) query.Subject = subject;
-    if (reg) query.REG = reg;
+    const exams = await Exam.find().sort({ CreatedAt: -1 });
     
-    // Direct class filtering using the Class field
-    if (classNum) {
-      query.Class = parseInt(classNum);
-    }
-
-    const marks = await Marks.find(query).sort({ LastUpdated: -1 });
-    res.json({ success: true, data: marks });
+    // Filter out any null or invalid entries before sending
+    const validExams = exams.filter(exam => exam && exam._id && exam.ExamName);
+    
+    console.log('Fetched exams:', validExams.length);
+    res.json({ success: true, data: validExams });
   } catch (error) {
+    console.error('Error fetching exams:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Get marks for a specific student
-router.get('/student/:reg', authenticate, async (req, res) => {
+// Get single exam by ID
+router.get('/:id', authenticate, async (req, res) => {
   try {
-    const marks = await Marks.find({ REG: req.params.reg }).sort({ Exam: 1, Subject: 1 });
-    res.json({ success: true, data: marks });
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+    res.json({ success: true, data: exam });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Create mark (Teacher/Admin only)
+// Create new exam (Teacher/Admin only)
 router.post('/', authenticate, authorize('Teacher', 'Admin'), async (req, res) => {
   try {
-    const { REG, Class, Subject, MarksObtained, Exam, Remarks } = req.body;
+    const { ExamName, Description } = req.body;
 
-    // Validate required fields
-    if (!REG || Class === undefined || !Subject || MarksObtained === undefined || !Exam) {
+    if (!ExamName || !ExamName.trim()) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Missing required fields: REG, Class, Subject, MarksObtained, and Exam are required' 
+        message: 'Exam name is required' 
       });
     }
 
-    // Validate marks range
-    const marksNum = parseInt(MarksObtained);
-    if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-      return res.status(400).json({ success: false, message: 'Marks must be between 0 and 100' });
-    }
-
-    // Validate class
-    const classNum = parseInt(Class);
-    if (isNaN(classNum) || classNum < 1 || classNum > 12) {
-      return res.status(400).json({ success: false, message: 'Class must be between 1 and 12' });
-    }
-
-    // Verify student exists and belongs to the specified class
-    const student = await Student.findOne({ REG });
-    if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
-    }
-
-    if (student.ClassEnrolled !== classNum) {
+    // Check if exam with same name already exists
+    const existingExam = await Exam.findOne({ ExamName: ExamName.trim() });
+    if (existingExam) {
       return res.status(400).json({ 
         success: false, 
-        message: `Student is enrolled in class ${student.ClassEnrolled}, not class ${classNum}` 
+        message: 'Exam with this name already exists' 
       });
     }
 
-    const mark = new Marks({
-      REG,
-      Class: classNum,
-      Subject,
-      MarksObtained: marksNum,
-      Exam,
-      Remarks: Remarks || ''
+    const exam = new Exam({ 
+      ExamName: ExamName.trim(),
+      Description: Description || '',
+      CreatedBy: req.user?.Email || 'Unknown',
+      CreatedAt: new Date(),
+      UpdatedAt: new Date()
     });
-    await mark.save();
+    await exam.save();
 
-    res.status(201).json({ success: true, data: mark });
+    console.log('Created exam:', exam);
+    res.status(201).json({ success: true, data: exam });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Result already exists for this student, subject, and exam' 
-      });
-    }
+    console.error('Error creating exam:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Bulk create marks for a class (Teacher/Admin only)
-router.post('/bulk', authenticate, authorize('Teacher', 'Admin'), async (req, res) => {
+// Update exam (Admin only)
+router.put('/:id', authenticate, authorize('Admin'), async (req, res) => {
   try {
-    const { Class, Subject, Exam, marks } = req.body;
+    const { ExamName, Description } = req.body;
 
-    if (!Class || !Subject || !Exam || !Array.isArray(marks) || marks.length === 0) {
+    if (!ExamName || !ExamName.trim()) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Missing required fields: Class, Subject, Exam, and marks array are required' 
+        message: 'Exam name is required' 
       });
     }
 
-    const classNum = parseInt(Class);
-    if (isNaN(classNum) || classNum < 1 || classNum > 12) {
-      return res.status(400).json({ success: false, message: 'Class must be between 1 and 12' });
+    const exam = await Exam.findById(req.params.id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
     }
 
-    // Validate and prepare bulk insert data
-    const bulkMarks = [];
-    const errors = [];
-
-    for (const item of marks) {
-      const { REG, MarksObtained, Remarks } = item;
-      
-      if (!REG || MarksObtained === undefined) {
-        errors.push(`Missing REG or MarksObtained for one entry`);
-        continue;
-      }
-
-      const marksNum = parseInt(MarksObtained);
-      if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-        errors.push(`Invalid marks for ${REG}: ${MarksObtained}`);
-        continue;
-      }
-
-      // Verify student exists and belongs to the class
-      const student = await Student.findOne({ REG });
-      if (!student) {
-        errors.push(`Student not found: ${REG}`);
-        continue;
-      }
-
-      if (student.ClassEnrolled !== classNum) {
-        errors.push(`${REG} is enrolled in class ${student.ClassEnrolled}, not class ${classNum}`);
-        continue;
-      }
-
-      bulkMarks.push({
-        REG,
-        Class: classNum,
-        Subject,
-        MarksObtained: marksNum,
-        Exam,
-        Remarks: Remarks || ''
-      });
-    }
-
-    if (bulkMarks.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No valid marks to insert',
-        errors 
-      });
-    }
-
-    // Use insertMany with ordered:false to continue on duplicate key errors
-    const result = await Marks.insertMany(bulkMarks, { ordered: false })
-      .catch(error => {
-        if (error.code === 11000) {
-          // Some duplicates were found, but others might have been inserted
-          return { insertedCount: error.result?.nInserted || 0 };
-        }
-        throw error;
-      });
-
-    res.status(201).json({ 
-      success: true, 
-      message: `Inserted ${result.insertedCount || bulkMarks.length} marks`,
-      errors: errors.length > 0 ? errors : undefined
+    // Check if another exam with same name exists
+    const existingExam = await Exam.findOne({ 
+      ExamName: ExamName.trim(), 
+      _id: { $ne: req.params.id } 
     });
+    if (existingExam) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Exam with this name already exists' 
+      });
+    }
+
+    exam.ExamName = ExamName.trim();
+    if (Description !== undefined) exam.Description = Description;
+    exam.UpdatedAt = new Date();
+    await exam.save();
+
+    res.json({ success: true, data: exam });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Update mark (Teacher/Admin only)
-router.put('/:id', authenticate, authorize('Teacher', 'Admin'), async (req, res) => {
-  try {
-    const { MarksObtained, Remarks } = req.body;
-    const mark = await Marks.findById(req.params.id);
-
-    if (!mark) {
-      return res.status(404).json({ success: false, message: 'Mark not found' });
-    }
-
-    if (MarksObtained !== undefined) {
-      const marksNum = parseInt(MarksObtained);
-      if (isNaN(marksNum) || marksNum < 0 || marksNum > 100) {
-        return res.status(400).json({ success: false, message: 'Marks must be between 0 and 100' });
-      }
-      mark.MarksObtained = marksNum;
-    }
-    if (Remarks !== undefined) mark.Remarks = Remarks;
-    mark.LastUpdated = new Date();
-    await mark.save();
-
-    res.json({ success: true, data: mark });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Delete mark (Admin only)
+// Delete exam (Admin only)
 router.delete('/:id', authenticate, authorize('Admin'), async (req, res) => {
   try {
-    const mark = await Marks.findByIdAndDelete(req.params.id);
-    if (!mark) {
-      return res.status(404).json({ success: false, message: 'Mark not found' });
+    const exam = await Exam.findByIdAndDelete(req.params.id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
     }
-    res.json({ success: true, message: 'Mark deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Get marks statistics by class and exam
-router.get('/stats', authenticate, async (req, res) => {
-  try {
-    const { class: classNum, exam } = req.query;
     
-    if (!classNum || !exam) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Class and Exam parameters are required' 
-      });
-    }
-
-    const stats = await Marks.aggregate([
-      { 
-        $match: { 
-          Class: parseInt(classNum), 
-          Exam: exam 
-        } 
-      },
-      {
-        $group: {
-          _id: '$Subject',
-          avgMarks: { $avg: '$MarksObtained' },
-          maxMarks: { $max: '$MarksObtained' },
-          minMarks: { $min: '$MarksObtained' },
-          totalStudents: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]);
-
-    res.json({ success: true, data: stats });
+    res.json({ success: true, message: 'Exam deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
