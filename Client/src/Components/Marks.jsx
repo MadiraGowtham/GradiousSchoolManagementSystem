@@ -290,47 +290,106 @@ function Marks() {
   };
 
   const handleAddResult = async (e) => {
-    e.preventDefault();
-    
-    if (!newResult.REG || !newResult.Class || !newResult.Subject || !newResult.MarksObtained || !newResult.Exam) {
-      alert("Please fill in all required fields");
-      return;
-    }
+  e.preventDefault();
+  
+  // Enhanced validation
+  if (!newResult.REG || !newResult.Class || !newResult.Subject || 
+      newResult.MarksObtained === '' || !newResult.Exam) {
+    alert("Please fill in all required fields");
+    console.error('❌ Missing fields:', {
+      REG: !!newResult.REG,
+      Class: !!newResult.Class,
+      Subject: !!newResult.Subject,
+      MarksObtained: newResult.MarksObtained !== '',
+      Exam: !!newResult.Exam
+    });
+    return;
+  }
 
-    const marks = parseInt(newResult.MarksObtained);
-    if (isNaN(marks) || marks < 0 || marks > 100) {
-      alert("Marks must be between 0 and 100");
-      return;
-    }
+  const marks = parseInt(newResult.MarksObtained);
+  if (isNaN(marks) || marks < 0 || marks > 100) {
+    alert("Marks must be between 0 and 100");
+    return;
+  }
 
-    try {
-      const res = await marksAPI.create({
-        REG: newResult.REG.toUpperCase(),
-        Class: parseInt(newResult.Class),
-        Subject: newResult.Subject,
-        MarksObtained: marks,
-        Exam: newResult.Exam,
-        Remarks: newResult.Remarks || ''
-      });
-
-      if (res.success) {
-        alert("Result added successfully!");
-        setShowAddForm(false);
-        setNewResult({
-          REG: "",
-          Class: "",
-          Subject: "",
-          MarksObtained: "",
-          Exam: "",
-          Remarks: ""
-        });
-        await loadMarks();
-      }
-    } catch (error) {
-      console.error('Error adding result:', error);
-      alert(error.response?.data?.message || "Failed to add result");
-    }
+  // Prepare the payload - EXACTLY matching backend schema
+  const payload = {
+    REG: newResult.REG.toUpperCase().trim(),
+    Class: parseInt(newResult.Class),
+    Subject: newResult.Subject.trim(),
+    MarksObtained: marks,
+    Exam: newResult.Exam.trim(),
+    Remarks: newResult.Remarks?.trim() || ''
   };
+
+  console.log('📤 Sending payload to /api/marks:', payload);
+  console.log('📋 Payload validation:');
+  console.log('  - REG:', payload.REG, '(type:', typeof payload.REG, ')');
+  console.log('  - Class:', payload.Class, '(type:', typeof payload.Class, ')');
+  console.log('  - Subject:', payload.Subject, '(type:', typeof payload.Subject, ')');
+  console.log('  - MarksObtained:', payload.MarksObtained, '(type:', typeof payload.MarksObtained, ')');
+  console.log('  - Exam:', payload.Exam, '(type:', typeof payload.Exam, ')');
+  console.log('  - Remarks:', payload.Remarks, '(type:', typeof payload.Remarks, ')');
+
+  try {
+    const res = await marksAPI.create(payload);
+
+    console.log('✅ Success Response:', res);
+
+    if (res.success) {
+      alert("✅ Result added successfully!");
+      setShowAddForm(false);
+      setNewResult({
+        REG: "",
+        Class: "",
+        Subject: "",
+        MarksObtained: "",
+        Exam: "",
+        Remarks: ""
+      });
+      await loadMarks();
+    } else {
+      console.error('⚠️ Unexpected response format:', res);
+      alert(res.message || "Failed to add result - unexpected response format");
+    }
+  } catch (error) {
+    console.error('❌ Error adding result:', error);
+    
+    // Enhanced error reporting
+    if (error.response) {
+      // Server responded with error status
+      console.error('📛 Server Error Details:');
+      console.error('  - Status:', error.response.status);
+      console.error('  - Status Text:', error.response.statusText);
+      console.error('  - Response Data:', error.response.data);
+      
+      const errorMessage = error.response.data?.message || 
+                          error.message ||
+                          `Server error: ${error.response.status}`;
+      
+      alert(`❌ Failed to add result:\n\n${errorMessage}\n\nCheck console for details.`);
+      
+      // Provide specific guidance based on error message
+      if (errorMessage.includes('Student not found')) {
+        console.log('💡 TIP: Verify that the student with REG', payload.REG, 'exists in the database');
+      } else if (errorMessage.includes('Class mismatch') || errorMessage.includes('enrolled in class')) {
+        console.log('💡 TIP: The student is enrolled in a different class. Check their actual class enrollment.');
+      } else if (errorMessage.includes('already exists') || errorMessage.includes('duplicate')) {
+        console.log('💡 TIP: This result already exists. Try updating it instead of creating a new one.');
+      }
+    } else if (error.request) {
+      // Request made but no response
+      console.error('📡 No Response Error:');
+      console.error('  - Request was sent but no response received');
+      console.error('  - This could be a network issue or server timeout');
+      alert("❌ Failed to add result:\n\nNo response from server. Please check your internet connection.");
+    } else {
+      // Error in request setup
+      console.error('⚙️ Request Setup Error:', error.message);
+      alert(`❌ Failed to add result:\n\n${error.message}`);
+    }
+  }
+};
 
   const handleNewResultChange = (field, value) => {
     setNewResult(prev => ({
